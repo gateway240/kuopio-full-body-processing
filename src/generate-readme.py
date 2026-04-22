@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Any, Callable, Self, Union
 
+import pandas as pd
 from tabulate import tabulate
 
 config_dir = "measurement-config"
@@ -238,6 +239,32 @@ contact = """
 Alexander Beattie, alexander.beattie@uef.fi
 """
 
+def generate_valid_markers(markers: list[str]) -> list[str]:
+    valid_markers: set[str] = set()
+
+    for path in markers:
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"CSV file not found: {path}")
+
+        df = pd.read_csv(path)
+
+        if df.empty:
+            raise ValueError(f"CSV file {path} is empty.")
+
+        if "id" not in df.columns:
+            raise ValueError(f"CSV file {path} missing required 'id' column")
+
+        ids = (
+            df["id"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+        )
+
+        valid_markers.update(ids)
+
+    return sorted(valid_markers)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process data.")
     parser.add_argument(
@@ -328,6 +355,9 @@ if __name__ == "__main__":
         #     ]
         # )
     )
+
     print(readme.build())
+    print("Valid Markers: \n")
+    print(generate_valid_markers([optical_participant_file,optical_bag_file,optical_tote_file]))
 
     readme.write(os.path.join(args.output_dir, "readme.txt"))

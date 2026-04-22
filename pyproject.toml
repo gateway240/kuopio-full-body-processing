@@ -19,14 +19,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-static-analysis = [
+dev = [
   'ruff==0.13.1',
   'mypy',
   'pre-commit',
   'pandas-stubs',
   'types-tabulate',
 ]
-dev = ['osim_obscure_dataset_preprocessing[static-analysis]']
 
 # https://pragmaticdatadev.substack.com/p/replacing-black-flake8-isort-and
 [tool.ruff]

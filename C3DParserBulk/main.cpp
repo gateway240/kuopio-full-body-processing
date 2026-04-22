@@ -51,6 +51,8 @@ void processC3DFile(const fs::path &filename, const fs::path &resultPath) {
   std::cout << "---Starting Processing: " << filename << std::endl;
   try {
     OpenSim::C3DFileAdapter c3dFileAdapter{};
+    c3dFileAdapter.setLocationForForceExpression(
+        OpenSim::C3DFileAdapter::ForceLocation::CenterOfPressure);
     auto tables = c3dFileAdapter.read(filename);
 
     std::shared_ptr<OpenSim::TimeSeriesTableVec3> marker_table =
@@ -157,6 +159,24 @@ void processC3DFile(const fs::path &filename, const fs::path &resultPath) {
     OpenSim::TRCFileAdapter trc_adapter{};
     trc_adapter.write(*marker_table, marker_file);
     std::cout << "\tWrote '" << marker_file << std::endl;
+
+    analog_table->addTableMetaData("nRows",
+                                   std::to_string(analog_table->getNumRows()));
+    // Dependant columns + time
+    analog_table->addTableMetaData(
+        "nColumns", std::to_string(analog_table->getNumColumns() + 1));
+
+    // These are not populated by our C3D files.
+    force_table->removeTableMetaDataKey("Corners");
+    force_table->removeTableMetaDataKey("CalibrationMatrices");
+    force_table->removeTableMetaDataKey("Origins");
+    force_table->removeTableMetaDataKey("Types");
+    force_table->removeTableMetaDataKey("events");
+    force_table->addTableMetaData("nRows",
+                                  std::to_string(force_table->getNumRows()));
+    // Dependant columns (vec3 will be flattened) * 3 + time
+    force_table->addTableMetaData(
+        "nColumns", std::to_string(force_table->getNumColumns() * 3 + 1));
 
     // Write forces and analog
     OpenSim::STOFileAdapter sto_adapter{};

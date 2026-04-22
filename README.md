@@ -66,6 +66,7 @@ Add files manually if match doesn't exist (e.g. IMU wasn't recorded)
 Check results:
 ```bash
 python src/check_dataset.py $OUTPUT_PATH/s03_aligned
+python src/check_optical_nans.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH
 ```
 
 ## Zip result
