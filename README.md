@@ -5,13 +5,13 @@ in OpenSim.
 
 ## Python processing
 
-Setting the export path and configuring the env (`python -m venv .venv`):
+Setting the export path and configuring the env (`python -m venv .venv` or `uv venv`):
 
 ```py
 export OUTPUT_PATH=~/data/kuopio-full-body-dataset
 export OUTPUT_PATH=out/kuopio-full-body-dataset
 source .venv/bin/activate
-pip install -e .[dev]
+uv pip install -e .[dev]
 ```
 
 ### Dataset readme generation
@@ -67,6 +67,8 @@ Check results:
 ```bash
 python src/check_dataset.py $OUTPUT_PATH/s03_aligned
 python src/check_optical_nans.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH
+python src/check_imu_table_test.py $OUTPUT_PATH/imu_table_test_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
+python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
 ```
 
 ## Zip result
