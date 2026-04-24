@@ -69,6 +69,7 @@ python src/check_dataset.py $OUTPUT_PATH/s03_aligned
 python src/check_optical_nans.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH
 python src/check_imu_table_test.py $OUTPUT_PATH/imu_table_test_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
 python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
+python src/check_imu_marker_correlation.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/untrimmed-correlation
 python src/check_imu_marker_correlation.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
 ```
 

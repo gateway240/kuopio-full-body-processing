@@ -43,7 +43,20 @@ std::pair<double, double> trimAndWrite(const fs::path &inFile,
                                        double tEnd) {
   // Create a file adapter instance
   OpenSim::TimeSeriesTable table(inFile.string());
+
+  // std::cout << "Old Length: " << table.getIndependentColumn().size() << std::endl;
   table.trim(tStart, tEnd);
+
+  const auto length = table.getIndependentColumn().size();
+  std::cout << "New Length: " << length << std::endl;
+  const double start = 0.0;
+  const double end = tEnd - tStart;
+  const double step_size = (end - start) / static_cast<double>((length - 1));
+  for (size_t i = 0; i < length; i++){
+    const double time = std::fma(i, step_size, start);
+    table.setIndependentValueAtIndex(i, time);
+  }
+
   OpenSim::STOFileAdapter::write(table, outFile.string());
   std::cout << "Trimmed and saved: " << outFile << std::endl;
   // Get new time range
@@ -52,29 +65,9 @@ std::pair<double, double> trimAndWrite(const fs::path &inFile,
     std::cerr << "Warning: Trimmed table is empty." << std::endl;
     return {-1.0, -1.0};
   }
-
   double newStart = newTimes.front();
   double newEnd = newTimes.back();
-  return {newStart, newEnd};
-}
-
-std::pair<double, double> trimAndWriteVec3(const fs::path &inFile,
-                                           const fs::path &outFile,
-                                           double tStart, double tEnd) {
-  // Create a file adapter instance
-  OpenSim::TimeSeriesTableVec3 table(inFile.string());
-  table.trim(tStart, tEnd);
-  OpenSim::STOFileAdapterVec3::write(table, outFile.string());
-  std::cout << "Trimmed and saved: " << outFile << std::endl;
-  // Get new time range
-  const auto &newTimes = table.getIndependentColumn();
-  if (newTimes.empty()) {
-    std::cerr << "Warning: Trimmed table is empty." << std::endl;
-    return {-1.0, -1.0};
-  }
-
-  double newStart = newTimes.front();
-  double newEnd = newTimes.back();
+  std::cout << "New start: " << newStart << " New end: " << newEnd << std::endl;
   return {newStart, newEnd};
 }
 
@@ -83,7 +76,20 @@ std::pair<double, double> trimAndWriteTrc(const fs::path &inFile,
                                            double tStart, double tEnd) {
   // Create a file adapter instance
   OpenSim::TimeSeriesTableVec3 table(inFile.string());
+
+  // std::cout << "Old Length: " << table.getIndependentColumn().size() << std::endl;
   table.trim(tStart, tEnd);
+
+  const auto length = table.getIndependentColumn().size();
+  std::cout << "New Length: " << length << std::endl;
+  const double start = 0.0;
+  const double end = tEnd - tStart;
+  const double step_size = (end - start) / static_cast<double>((length - 1));
+  for (size_t i = 0; i < length; i++){
+    const double time = std::fma(i, step_size, start);
+    table.setIndependentValueAtIndex(i, time);
+  }
+
   OpenSim::TRCFileAdapter::write(table, outFile.string());
   std::cout << "Trimmed and saved: " << outFile << std::endl;
   // Get new time range
@@ -92,29 +98,9 @@ std::pair<double, double> trimAndWriteTrc(const fs::path &inFile,
     std::cerr << "Warning: Trimmed table is empty." << std::endl;
     return {-1.0, -1.0};
   }
-
   double newStart = newTimes.front();
   double newEnd = newTimes.back();
-  return {newStart, newEnd};
-}
-
-std::pair<double, double> trimAndWriteQuaternion(const fs::path &inFile,
-                                                 const fs::path &outFile,
-                                                 double tStart, double tEnd) {
-  // Create a file adapter instance
-  OpenSim::TimeSeriesTableQuaternion table(inFile.string());
-  table.trim(tStart, tEnd);
-  OpenSim::STOFileAdapterQuaternion::write(table, outFile.string());
-  std::cout << "Trimmed and saved: " << outFile << std::endl;
-  // Get new time range
-  const auto &newTimes = table.getIndependentColumn();
-  if (newTimes.empty()) {
-    std::cerr << "Warning: Trimmed table is empty." << std::endl;
-    return {-1.0, -1.0};
-  }
-
-  double newStart = newTimes.front();
-  double newEnd = newTimes.back();
+  std::cout << "New start: " << newStart << " New end: " << newEnd << std::endl;
   return {newStart, newEnd};
 }
 
@@ -201,45 +187,62 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   std::cout << "Trim window for '" << trialName << "': " << tStart << "s to "
             << tEnd << "s\n";
 
-  // Trim and write IMU files
-
   // Create output directory if it doesn't exist
   fs::create_directories(outAnalog.parent_path());
   fs::create_directories(outOrientations.parent_path());
 
-  trimAndWriteQuaternion(orientationsFile, outOrientations, tStart, tEnd);
-  auto [newStart, newEnd] =
-      trimAndWriteVec3(accelerationsFile, outAccelerations, tStart, tEnd);
 
-  trimAndWrite(analogFile, outAnalog, newStart, newEnd);
-  trimAndWrite(grfFile, outGrf, newStart, newEnd);
-  trimAndWriteTrc(markerFile, outMarker, newStart, newEnd);
+  // Trim and write IMU files
+  OpenSim::STOFileAdapterQuaternion::write(orientations,outOrientations.string());
+  OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
+  OpenSim::STOFileAdapterVec3::write(accelerations, outAccelerations.string());
+
+  trimAndWrite(analogFile, outAnalog, tStart, tEnd);
+  trimAndWrite(grfFile, outGrf, tStart, tEnd);
+  trimAndWriteTrc(markerFile, outMarker, tStart, tEnd);
 }
 
-void processDirectory(const fs::path &originalRoot, const fs::path &newRoot) {
-  std::vector<std::future<void>> futures; // Store async tasks
 
-  for (const auto &entry : fs::directory_iterator(originalRoot)) {
-    if (entry.is_directory()) {
-      // Recursively process subdirectory
-      processDirectory(entry.path(), newRoot);
-    } else if (entry.is_regular_file()) {
-      const auto file = entry.path();
+void processDirectory(const fs::path& originalRoot,
+                      const fs::path& newRoot) {
+  const unsigned maxThreads =
+      std::max(1u, std::thread::hardware_concurrency());
 
-      if (file.extension() == ".sto" &&
-          file.filename().string().find("_analog") != std::string::npos) {
+  std::counting_semaphore<> sem(maxThreads);
+  std::vector<std::future<void>> futures;
 
-        // Launch each trial in parallel using std::async
-        futures.emplace_back(
-            std::async(std::launch::async, [file, originalRoot, newRoot]() {
-              try {
-                processTrial(file, originalRoot, newRoot);
-              } catch (const std::exception &e) {
-                std::cerr << "Error processing " << file << ": " << e.what()
-                          << std::endl;
-              }
-            }));
-      }
+  for (const auto& entry :
+       fs::recursive_directory_iterator(
+           originalRoot,
+           fs::directory_options::skip_permission_denied)) {
+
+    if (!entry.is_regular_file())
+      continue;
+
+    const auto path = entry.path();
+
+    auto ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+
+    const auto name = path.filename().string();
+
+    if (ext == ".sto" &&
+        name.find("_analog") != std::string::npos) {
+
+      sem.acquire();
+
+      futures.emplace_back(
+        std::async(std::launch::async,
+          [path, originalRoot, newRoot, &sem]() {
+            try {
+              processTrial(path, originalRoot, newRoot);
+            } catch (const std::exception& e) {
+              std::cerr << "Error processing "
+                        << path << ": "
+                        << e.what() << std::endl;
+            }
+            sem.release();
+          }));
     }
   }
 

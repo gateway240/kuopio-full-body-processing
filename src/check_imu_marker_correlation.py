@@ -9,7 +9,17 @@ from typing import Dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, resample
+from scipy.spatial.transform import Rotation as R
+
+# max_workers: The maximum number of processes that can be used to
+#     execute the given calls. If None or not given then as many
+#     worker processes will be created as the machine has processors.
+MAX_WORKERS = 12
+# Latitude: 62.8929513
+# Height: 85 m above sea level
+# https://www.sensorsone.com/local-gravity-calculator/
+GRAVITY = 9.82112
 
 KNOWN_TRIALS = {
     # "back_fly",
@@ -34,6 +44,7 @@ KNOWN_TRIALS = {
 def _read_imu_file_without_header(
     file_path: Path, sep: str = "\t"
 ) -> pd.DataFrame:
+    print("Starting on: ",file_path)
     with open(file_path, "r") as file:
         # Skip header
         for line in file:
@@ -58,22 +69,25 @@ def _read_imu_file_without_header(
         if not is_vector_column(df[col]):
             continue
 
-        # Parse column into Nx3 array
+        # Parse column into array
         arr = np.vstack(
             df[col]
             .astype(str)
             .apply(lambda x: np.fromstring(x, sep=","))
             .values
         )
-
-        if arr.shape[1] != 3:
-            raise ValueError(f"Column {col}: expected 3 values, got {arr.shape}")
-
-        # Create new columns
-        new_cols[f"{col}_x"] = arr[:, 0]
-        new_cols[f"{col}_y"] = arr[:, 1]
-        new_cols[f"{col}_z"] = arr[:, 2]
-
+        if arr.shape[1] == 3:
+            # Create new columns
+            new_cols[f"{col}_x"] = arr[:, 0]
+            new_cols[f"{col}_y"] = arr[:, 1]
+            new_cols[f"{col}_z"] = arr[:, 2]
+        elif arr.shape[1] == 4:
+            new_cols[f"{col}_w"] = arr[:, 0]
+            new_cols[f"{col}_x"] = arr[:, 1]
+            new_cols[f"{col}_y"] = arr[:, 2]
+            new_cols[f"{col}_z"] = arr[:, 3]
+        else:
+            raise ValueError(f"Column {col}: unknown column shape {arr.shape}")
         cols_to_drop.append(col)
 
     # Replace columns
@@ -174,14 +188,6 @@ def is_versioned_trial(filename: str, suffix: str) -> bool:
     return last_part.isdigit()
 
 def collect_motion_files(root_dir: str):
-    """
-    Returns:
-        Dict[trial_name] = {
-            "participant": str,
-            "trc": path,
-            "sto": path
-        }
-    """
     trials = {}
 
     for participant in os.listdir(root_dir):
@@ -197,39 +203,28 @@ def collect_motion_files(root_dir: str):
             f.replace("_markers.trc", ""): os.path.join(mocap_dir, f)
             for f in os.listdir(mocap_dir)
             if f.endswith("_markers.trc")
-            and "-" in f.replace("_markers.trc", "")
-            and not f.replace("_markers.trc", "").split("-")[-1].isdigit()
-            or "-" not in f.replace("_markers.trc", "")
         }
-        # print(trc_files)
-
         # index imu
-        sto_files = {
+        sto_acceleration_files = {
             f.replace("_accelerations.sto", ""): os.path.join(imu_dir, f)
             for f in os.listdir(imu_dir)
             if f.endswith("_accelerations.sto")
-            and "-" in f.replace("_accelerations.sto", "")
-            and not f.replace("_accelerations.sto", "").split("-")[-1].isdigit()
-            or "-" not in f.replace("_accelerations.sto", "")
         }
-        print("STO: ")
-        for trial_name in sto_files.keys():
-            print(repr(trial_name))
-        print("END")
+        sto_orientation_files = {
+            f.replace("_orientations.sto", ""): os.path.join(imu_dir, f)
+            for f in os.listdir(imu_dir)
+            if f.endswith("_orientations.sto")
+        }
+
         # match
         for trial_name, trc_path in trc_files.items():
-            print("TRIAL:" ,repr(trial_name))
-            print("TRC:", repr(trial_name))
-            print("IN STO KEYS?:", trial_name in sto_files)
-            if trial_name in sto_files:
-                print("MATCHED KEY:", repr(trial_name))
-            if trial_name in sto_files:
+            if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
                 trials[(participant,trial_name)] = {
                     "participant": participant,
                     "trc": trc_path,
-                    "sto": sto_files[trial_name],
+                    "sto_acceleration": sto_acceleration_files[trial_name],
+                    "sto_orientation": sto_orientation_files[trial_name]
                 }
-        # raise ValueError("bads")
     # print(trials)
     return trials
 
@@ -271,6 +266,10 @@ def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
     target_dt = pd.to_timedelta(1 / target_fs, unit="s")
     return df.resample(rule = pd.to_timedelta(target_dt)).mean()
 
+def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
+    n_samples = int(len(x) * target_fs / current_fs)
+    return resample(x, n_samples)
+
 
 def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
     coords = trc[[f"{marker}_x", f"{marker}_y", f"{marker}_z"]].values
@@ -282,34 +281,23 @@ def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
 
     # acceleration (second derivative)
     acc = np.gradient(vel, dt, axis=0)
-        # gravity vector (Z-up convention)
-    g = np.array([0, 0, -9.81])
-
-    # add gravity → simulated accelerometer signal
-    acc_with_gravity = acc + g
 
     # magnitude of acceleration vector
-    acc_norm = np.linalg.norm(acc_with_gravity, axis=1, ord=2)
+    acc_norm = np.linalg.norm(acc, axis=1, ord=2)
 
     return acc_norm
-    # norm = np.linalg.norm(coords, axis=1, ord=2)
-    # print("MARKER NORM: ", norm)
-    # return norm
-    # return (norm - norm.min()) / (norm.max() - norm.min())
 
-def imu_acc_norm(sto: pd.DataFrame, acc_col: str):
-    print(sto.columns.to_list())
-    acc = sto[[f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]].values
-    # attempt gravity removal
-    # print(acc)
-    # acc = acc - np.mean(acc, axis=0)
-    norm = np.linalg.norm(acc, axis=1, ord=2)
+def imu_acc_norm(sto_accel: pd.DataFrame, sto_ori: pd.DataFrame, acc_col: str):
+    # print(sto_accel.columns.to_list())
+    acc = sto_accel[[f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]].values
+    ori = sto_ori[[f"{acc_col}_w",f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]].values
+    r_mat = R.from_quat(ori, scalar_first=True)
+    g = np.array([0, 0, GRAVITY])
+    free_acc = r_mat.apply(acc) - g
+    # print(free_acc)
+    norm = np.linalg.norm(free_acc, axis=1, ord=2)
     # print("IMU NORM: ", norm)
-    # mean = np.mean(norm, axis=1)
-    # print("IMU MEAN: ", mean)
-    # return mean
     return norm
-    # return (norm - norm.min()) / (norm.max() - norm.min())
 
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING
@@ -356,35 +344,24 @@ def _process_single_trial(args):
     best_corr = -1234
     try:
         trc = read_opensim_marker_file(Path(info["trc"]),skip=3, index_col=1)
-        sto = _read_imu_file_without_header(Path(info["sto"]))
+        sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
+        sto_ori = _read_imu_file_without_header(Path(info["sto_orientation"]))
 
         # assume sampling rates known
         TRC_FS = 100.0
         IMU_FS = 60.0
-
-        # filter both
         CUTOFF = 30.0
         trc = butter_lowpass_filter(trc, cutoff=CUTOFF, order=4)
-        sto = butter_lowpass_filter(sto, cutoff=CUTOFF, order=4)
-        # print("Lengths before: ",len(trc), len(sto))
+        sto_accel = butter_lowpass_filter(sto_accel, cutoff=CUTOFF, order=4)
+        sto_ori = butter_lowpass_filter(sto_ori, cutoff=CUTOFF, order=4)
         # downsample TRC to 60 Hz
-        sto.index = pd.to_timedelta(sto.index.astype(float), unit="s")
+        sto_accel.index = pd.to_timedelta(sto_accel.index.astype(float), unit="s")
+        sto_accel.index = pd.to_timedelta(sto_ori.index.astype(float), unit="s")
         trc.index = pd.to_timedelta(trc.index.astype(float), unit="s")
-        # print("INDEX TEST:")
-        # print(sto.index)
-        # print(trc.index)
-        trc = downsample(trc, target_fs=IMU_FS, current_fs=TRC_FS)
-        # print("INDEX TEST:")
-        # print(sto.index)
-        # print(trc.index)
 
-        # compute signals
-        # print(trc)
-        # print(sto)
-
-
-        marker_signal = marker_acc_norm(trc, "IMU_PELVIS", IMU_FS)
-        imu_signal = imu_acc_norm(sto, "pelvis_imu")
+        marker_signal_og = marker_acc_norm(trc, "IMU_PELVIS", TRC_FS)
+        marker_signal = downsample_np(marker_signal_og,target_fs=IMU_FS, current_fs=TRC_FS)
+        imu_signal = imu_acc_norm(sto_accel, sto_ori, "pelvis_imu")
         n = min(len(marker_signal), len(imu_signal))
         marker_signal = marker_signal[:n]
         imu_signal = imu_signal[:n]
@@ -396,14 +373,9 @@ def _process_single_trial(args):
         print("imu:", imu_signal.shape)
         x = marker_signal
         y = imu_signal
-        # x = (marker_signal - np.mean(marker_signal)) / np.std(marker_signal)
-        # y = (imu_signal - np.mean(imu_signal)) / np.std(imu_signal)
-
         # print("x:", x.shape)
         # print("y:", y.shape)
         corr = np.correlate(x, y, mode="full")
-        # # lag axis (optional but useful)
-        # lags = np.arange(-n + 1, n)
 
         # MATLAB 'coeff' normalization
         norm = np.sqrt(np.sum(x**2) * np.sum(y**2))
@@ -457,7 +429,7 @@ def process_motion_files(
         for (participant, trial), info in motions.items()
     ]
 
-    with ProcessPoolExecutor() as executor:
+    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
         futures = [executor.submit(_process_single_trial, t) for t in tasks]
 
         for future in as_completed(futures):
@@ -484,8 +456,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir,exist_ok=True)
-
+    Path.mkdir(output_dir,exist_ok=True)
     motions_raw = collect_motion_files(args.source_dir)
     print(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
