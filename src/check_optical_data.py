@@ -1,87 +1,78 @@
 from __future__ import annotations
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import argparse
 import os
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Tuple
 
 import pandas as pd
 
-VALID_MARKERS = [
-    "BBR",
-    "BBS",
-    "BLB",
-    "BLF",
-    "BMS",
-    "BRB",
-    "BRF",
+PARTICIPANT_MARKERS = {
     "C7",
     "CLAV",
-    "IMU_LTIB",
-    "IMU_PELVIS",
-    "IMU_RTIB",
-    "LANK",
-    "LASI",
-    "LBHD",
-    "LELB",
-    "LFHD",
-    "LFIN",
-    "LFMH",
     "LFRM",
-    "LHEE",
+    "LTIAP",
+    "LTOE",
+    "RTHAP",
+    "STRN",
+    "LTIAD",
+    "RFIN",
+    "LTHAP",
+    "LSMH",
     "LKNE",
+    "LUPA",
+    "RELB",
+    "IMU_RTIB",
+    "RKNE",
+    "RTHAD",
+    "RMED",
+    "LELB",
+    "RBAK",
+    "LTHI",
+    "LTHAD",
+    "LFHD",
+    "RUPA",
+    "LWRB",
+    "RFHD",
     "LKNM",
-    "LMED",
+    "RTIAP",
+    "LASI",
+    "RSHO",
+    "LBHD",
+    "RFRM",
+    "RANK",
+    "RVMH",
+    "RKNM",
+    "RHEE",
+    "IMU_PELVIS",
+    "LVMH",
+    "RTIB",
+    "RTIAD",
+    "RTHI",
+    "RWRB",
+    "RWRA",
+    "RSMH",
+    "IMU_LTIB",
+    "LFIN",
     "LPSI",
     "LSHO",
-    "LSMH",
-    "LTHAD",
-    "LTHAP",
-    "LTHI",
-    "LTIAD",
-    "LTIAP",
-    "LTIB",
-    "LTOE",
-    "LUPA",
-    "LVMH",
-    "LWRA",
-    "LWRB",
-    "RANK",
-    "RASI",
-    "RBAK",
-    "RBHD",
-    "RELB",
-    "RFHD",
-    "RFIN",
-    "RFMH",
-    "RFRM",
-    "RHEE",
-    "RKNE",
-    "RKNM",
-    "RMED",
     "RPSI",
-    "RSHO",
-    "RSMH",
-    "RTHAD",
-    "RTHAP",
-    "RTHI",
-    "RTIAD",
-    "RTIAP",
-    "RTIB",
+    "LFMH",
+    "LTIB",
+    "RFMH",
+    "LHEE",
+    "LWRA",
+    "RASI",
+    "LANK",
     "RTOE",
-    "RUPA",
-    "RVMH",
-    "RWRA",
-    "RWRB",
-    "STRN",
+    "RBHD",
+    "LMED",
     "T10",
-    "TLFB",
-    "TLFT",
-    "TRFT",
-    "TRSB",
-]
+}
+BAG_MARKERS =  {'BRF', 'BLF', 'BRB', 'BBS', 'BMS', 'BLB', 'BBR'}
+TOTE_MARKERS =  {'TRSB', 'TLFB', 'TLFT', 'TRFT'}
 
 
 def read_opensim_marker_file(
@@ -90,7 +81,6 @@ def read_opensim_marker_file(
     skip: int = 7,
     sep: str = "\t",
 ) -> pd.DataFrame:
-
     # Read with multi-level header (two rows)
     raw = pd.read_csv(file_path, sep=sep, header=None, skiprows=skip, low_memory=False)
 
@@ -163,7 +153,22 @@ def _process_single_file(args):
     participant, motion, f = args
 
     df = read_opensim_marker_file(Path(f), skip=3)
-    df = df.loc[:, df.columns.str.startswith(tuple(VALID_MARKERS))]
+    star_columns_count = df.columns.str.startswith("*").sum()
+    print("Columns starting with '*':", star_columns_count)
+
+    df = df.loc[:, df.columns.str.startswith(tuple(PARTICIPANT_MARKERS))]
+    present_markers = {
+        marker
+        for marker in PARTICIPANT_MARKERS
+        if any(col.startswith(marker) for col in df.columns)
+    }
+
+    missing_markers = PARTICIPANT_MARKERS - present_markers
+
+    missing_count = len(missing_markers)
+
+    print("Missing markers:", missing_markers)
+    print("Number of missing markers:", missing_count)
 
     total_elements = df.size
     print("Total number of elements:", total_elements)
@@ -179,8 +184,11 @@ def _process_single_file(args):
         "motion": motion,
         "file": f,
         "total_elements": total_elements,
+        "star_columns": star_columns_count,
         "nan_count": total_nan_count,
         "nan_percent": nan_ratio * 100,
+        "missing_count": missing_count,
+        "missing_markers": missing_markers,
     }
 
 
@@ -230,7 +238,7 @@ def main() -> None:
     summary_df = summary_df.drop("file", axis=1)
     summary_df = summary_df.sort_values(["participant", "motion"])
     print(summary_df)
-    output_file = output_dir / "nan-check.csv"
+    output_file = output_dir / "optical-data-check.csv"
     summary_df.to_csv(output_file, index=False)
 
     participant_summary = summary_df.groupby("participant", as_index=False).agg(

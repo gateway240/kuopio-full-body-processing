@@ -22,7 +22,6 @@
  * -------------------------------------------------------------------------- */
 
 // INCLUDES
-#include <Common/TimeSeriesTable.h>
 #include <OpenSim/Common/C3DFileAdapter.h>
 #include <OpenSim/Common/STOFileAdapter.h>
 #include <OpenSim/Common/TRCFileAdapter.h>
@@ -30,67 +29,70 @@
 #include <SimTKcommon/SmallMatrix.h>
 #include <SimTKcommon/internal/Quaternion.h>
 #include <chrono> // for std::chrono functions
+#include <cstddef>
 #include <filesystem>
 #include <future> // For std::async, std::future
 #include <iostream>
 #include <string>
 
+// const auto &MAX_THREADS = 12;
+const auto &MAX_THREADS = std::thread::hardware_concurrency();
+
 namespace fs = std::filesystem;
 
 // Trim a TimeSeriesTable to a time window and write to new location
-std::pair<double, double> trimAndWrite(const fs::path &inFile,
+template <typename A, typename T>
+std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
                                        const fs::path &outFile, double tStart,
                                        double tEnd) {
-  // Create a file adapter instance
-  OpenSim::TimeSeriesTable table(inFile.string());
+  // std::cout << "Old Length: " << table.getIndependentColumn().size() <<
+  // std::endl;
 
-  // std::cout << "Old Length: " << table.getIndependentColumn().size() << std::endl;
-  table.trim(tStart, tEnd);
+  const auto &timeCol = table.getIndependentColumn();
 
-  const auto length = table.getIndependentColumn().size();
-  std::cout << "New Length: " << length << std::endl;
+  const size_t &closest_start = table.getNearestRowIndexForTime(tStart);
+  const size_t &closest_end = table.getNearestRowIndexForTime(tEnd, false);
+
+  // const size_t &before_start = table.getRowIndexBeforeTime(tStart);
+  // const size_t &before_end = table.getRowIndexBeforeTime(tEnd);
+
+  // const size_t &after_start = table.getRowIndexAfterTime(tStart);
+  // const size_t &after_end = table.getRowIndexAfterTime(tEnd);
+
+  const size_t &start_index = closest_start;
+  const size_t &end_index = closest_end;
+
+  // if (timeCol[start_index] != tStart) {
+  // std::cout << "File: " << outFile
+  //           << "Target start: " << tStart
+  //           << " After start: " << timeCol[after_start]
+  //           << " Closest time: " << timeCol[closest_start]
+  //           << " Before time: " << timeCol[before_start] << " start index "
+  //           << after_start << " closest start " << closest_start
+  //           << " before start " << before_start
+  //           << " diff: " << after_start - before_start << std::endl;
+  // }
+  // if (timeCol[end_index] != tEnd) {
+  //   std::cout << "Target end: " << tEnd
+  //             << " closest time: " << timeCol[after_end] << std::endl;
+  // }
+  // do the actual trimming based on index instead of time.
+  // CANNOT use table.trim because it uses the "next" time.
+  // we need the closest time to avoid the off by 1 issue
+  table.trimToIndices(start_index, end_index);
+
+  const auto &length = table.getNumRows();
+  // std::cout << "Outfile: " << outFile << " New Length: " << length <<
+  // std::endl;
   const double start = 0.0;
   const double end = tEnd - tStart;
   const double step_size = (end - start) / static_cast<double>((length - 1));
-  for (size_t i = 0; i < length; i++){
+  for (size_t i = 0; i < length; i++) {
     const double time = std::fma(i, step_size, start);
     table.setIndependentValueAtIndex(i, time);
   }
 
-  OpenSim::STOFileAdapter::write(table, outFile.string());
-  std::cout << "Trimmed and saved: " << outFile << std::endl;
-  // Get new time range
-  const auto &newTimes = table.getIndependentColumn();
-  if (newTimes.empty()) {
-    std::cerr << "Warning: Trimmed table is empty." << std::endl;
-    return {-1.0, -1.0};
-  }
-  double newStart = newTimes.front();
-  double newEnd = newTimes.back();
-  std::cout << "New start: " << newStart << " New end: " << newEnd << std::endl;
-  return {newStart, newEnd};
-}
-
-std::pair<double, double> trimAndWriteTrc(const fs::path &inFile,
-                                           const fs::path &outFile,
-                                           double tStart, double tEnd) {
-  // Create a file adapter instance
-  OpenSim::TimeSeriesTableVec3 table(inFile.string());
-
-  // std::cout << "Old Length: " << table.getIndependentColumn().size() << std::endl;
-  table.trim(tStart, tEnd);
-
-  const auto length = table.getIndependentColumn().size();
-  std::cout << "New Length: " << length << std::endl;
-  const double start = 0.0;
-  const double end = tEnd - tStart;
-  const double step_size = (end - start) / static_cast<double>((length - 1));
-  for (size_t i = 0; i < length; i++){
-    const double time = std::fma(i, step_size, start);
-    table.setIndependentValueAtIndex(i, time);
-  }
-
-  OpenSim::TRCFileAdapter::write(table, outFile.string());
+  A::write(table, outFile.string());
   std::cout << "Trimmed and saved: " << outFile << std::endl;
   // Get new time range
   const auto &newTimes = table.getIndependentColumn();
@@ -157,19 +159,14 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   const auto &data = analog.getDependentColumn("trigger");
 
   double tStart = 0.0;
-  double tEnd = -1.0;
-  if (!times.empty() && !times_orientations.empty()) {
-    tEnd = (times.size() <= times_orientations.size())
-               ? times.back()
-               : times_orientations.back();
-  }
+  double tEnd = times_orientations.back();
   double threshold = 1;
   for (size_t i = 1; i < times.size(); ++i) {
     double timestamp = times.at(i);
     double prev = data(i - 1);
     double curr = data(i);
     if (prev <= threshold && curr > threshold) {
-      if (tStart == 0 && timestamp < 10.0) {
+      if (tStart == 0 && timestamp < 20.0) {
         tStart = times[i];
       } else {
         tEnd = times[i];
@@ -177,44 +174,84 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
       }
     }
   }
-
-  if (tStart < 0 || tEnd < 0 || tEnd <= tStart) {
+  // Fallback if end trigger is there but beginning isn't
+  const auto &back_start = tEnd - times_orientations.back();
+  if (tStart == 0 && back_start > 0) {
+    std::cout << "Falling back to end trigger: " << back_start << std::endl;
+    tStart = back_start;
+  }
+  if (tStart <= 0 || tEnd < 0 || tEnd <= tStart) {
     std::cerr << "Invalid trigger signal in: " << analogFile
               << " start: " << tStart << " end: " << tEnd << std::endl;
-    return;
   }
 
-  std::cout << "Trim window for '" << trialName << "': " << tStart << "s to "
+  std::cout << "Trim window for '" << analogFile << "': " << tStart << "s to "
             << tEnd << "s\n";
 
   // Create output directory if it doesn't exist
   fs::create_directories(outAnalog.parent_path());
   fs::create_directories(outOrientations.parent_path());
 
+  // write IMU files
+  OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
+  if (tEnd > times.back()) {
+    std::cout << "Analog shorter than IMU for " << outOrientations << std::endl;
+    tEnd = times.back();
+    trimAndWrite<OpenSim::STOFileAdapterQuaternion>(
+        orientations, outOrientations.string(), 0, tEnd);
+    trimAndWrite<OpenSim::STOFileAdapterVec3>(
+        accelerations, outAccelerations.string(), 0, tEnd);
+  } else {
+    OpenSim::STOFileAdapterQuaternion::write(orientations,
+                                             outOrientations.string());
+    OpenSim::STOFileAdapterVec3::write(accelerations,
+                                       outAccelerations.string());
+  }
+
+  // const double step_size =
+  //     (tEnd - tStart) /
+  //     static_cast<double>((analog.getIndependentColumn().size() - 1));
+  // tStart = tStart - step_size;
+  // tEnd = tEnd - step_size;
 
   // Trim and write IMU files
-  OpenSim::STOFileAdapterQuaternion::write(orientations,outOrientations.string());
-  OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
-  OpenSim::STOFileAdapterVec3::write(accelerations, outAccelerations.string());
+  // if (recalcIMU) {
+  //   std::cout << "Starting IMU recalc!" << std::endl;
+  // const auto &time_col = orientations.getIndependentColumn();
+  // const auto &start_index = time_col.front();
+  // const auto &end_index = time_col.back();
+  // trimAndWrite<OpenSim::STOFileAdapterQuaternion>(
+  //     orientations, outOrientations.string(), time_col[start_index + 1],
+  //     time_col[end_index]);
+  // trimAndWrite<OpenSim::STOFileAdapterVec3>(
+  //     accelerations, outAccelerations.string(), time_col[start_index + 1],
+  //     time_col[end_index]);
+  // } else {
+  // OpenSim::STOFileAdapterQuaternion::write(orientations,
+  //  outOrientations.string());
+  // OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
+  // OpenSim::STOFileAdapterVec3::write(accelerations,
+  // outAccelerations.string());
+  // }
+  trimAndWrite<OpenSim::STOFileAdapter>(analog, outAnalog, tStart, tEnd);
 
-  trimAndWrite(analogFile, outAnalog, tStart, tEnd);
-  trimAndWrite(grfFile, outGrf, tStart, tEnd);
-  trimAndWriteTrc(markerFile, outMarker, tStart, tEnd);
+  OpenSim::TimeSeriesTable grf_table(grfFile.string());
+  trimAndWrite<OpenSim::STOFileAdapter>(grf_table, outGrf, tStart, tEnd);
+
+  OpenSim::TimeSeriesTableVec3 marker_table(markerFile.string());
+  // const auto &recalcIMU = calculateStartEnd(marker_table, tStart, tEnd);
+  trimAndWrite<OpenSim::TRCFileAdapter>(marker_table, outMarker, tStart, tEnd);
 }
 
-
-void processDirectory(const fs::path& originalRoot,
-                      const fs::path& newRoot) {
-  const unsigned maxThreads =
-      std::max(1u, std::thread::hardware_concurrency());
-
+void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
+                      const unsigned &maxThreads =
+                          std::max(1u, std::thread::hardware_concurrency())) {
+  std::cout << "Processing with max threads: " << maxThreads << std::endl;
   std::counting_semaphore<> sem(maxThreads);
   std::vector<std::future<void>> futures;
 
-  for (const auto& entry :
-       fs::recursive_directory_iterator(
-           originalRoot,
-           fs::directory_options::skip_permission_denied)) {
+  for (const auto &entry : fs::recursive_directory_iterator(
+           originalRoot, fs::directory_options::skip_permission_denied)) {
 
     if (!entry.is_regular_file())
       continue;
@@ -226,20 +263,16 @@ void processDirectory(const fs::path& originalRoot,
 
     const auto name = path.filename().string();
 
-    if (ext == ".sto" &&
-        name.find("_analog") != std::string::npos) {
+    if (ext == ".sto" && name.find("_analog") != std::string::npos) {
 
       sem.acquire();
-
       futures.emplace_back(
-        std::async(std::launch::async,
-          [path, originalRoot, newRoot, &sem]() {
+          std::async(std::launch::async, [path, originalRoot, newRoot, &sem]() {
             try {
               processTrial(path, originalRoot, newRoot);
-            } catch (const std::exception& e) {
-              std::cerr << "Error processing "
-                        << path << ": "
-                        << e.what() << std::endl;
+            } catch (const std::exception &e) {
+              std::cerr << "Error processing " << path << ": " << e.what()
+                        << std::endl;
             }
             sem.release();
           }));
@@ -277,7 +310,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  processDirectory(directoryPath, outputPath);
+  processDirectory(directoryPath, outputPath, MAX_THREADS);
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
   std::cout << "Runtime = "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -

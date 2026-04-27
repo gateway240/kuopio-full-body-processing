@@ -239,7 +239,7 @@ contact = """
 Alexander Beattie, alexander.beattie@uef.fi
 """
 
-def generate_valid_markers(markers: list[str]) -> list[str]:
+def generate_valid_markers(markers: list[str]) -> set[str]:
     valid_markers: set[str] = set()
 
     for path in markers:
@@ -263,7 +263,7 @@ def generate_valid_markers(markers: list[str]) -> list[str]:
 
         valid_markers.update(ids)
 
-    return sorted(valid_markers)
+    return valid_markers
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process data.")
@@ -357,7 +357,8 @@ if __name__ == "__main__":
     )
 
     print(readme.build())
-    print("Valid Markers: \n")
-    print(generate_valid_markers([optical_participant_file,optical_bag_file,optical_tote_file]))
+    print("Valid Participant Markers: \n",generate_valid_markers([optical_participant_file]))
+    print("Valid Bag Markers: \n", generate_valid_markers([optical_bag_file]))
+    print("Valid Tote Markers: \n", generate_valid_markers([optical_tote_file]))
 
     readme.write(os.path.join(args.output_dir, "readme.txt"))

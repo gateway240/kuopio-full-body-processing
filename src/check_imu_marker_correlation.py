@@ -253,6 +253,12 @@ def butter_lowpass_filter(
     cols_to_filter = [c for c in data.columns if c not in exclude_cols]
     # print(cols_to_filter)
     # logger.info(cols_to_filter)
+
+    data[cols_to_filter] = (
+        data[cols_to_filter]
+        .interpolate(method="linear", limit_direction="both")
+    )
+
     filtered_values = filtfilt(b, a, data[cols_to_filter], axis=0)
 
     filtered_df = data.copy()
@@ -273,6 +279,9 @@ def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
 
 def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
     coords = trc[[f"{marker}_x", f"{marker}_y", f"{marker}_z"]].values
+    nan_count = np.isnan(coords).sum()
+    if nan_count > 0:
+        print("NANS", nan_count)
     coords = coords / 1000 # mm to m
     dt = 1.0 / fps
 
@@ -358,7 +367,7 @@ def _process_single_trial(args):
         sto_accel.index = pd.to_timedelta(sto_accel.index.astype(float), unit="s")
         sto_accel.index = pd.to_timedelta(sto_ori.index.astype(float), unit="s")
         trc.index = pd.to_timedelta(trc.index.astype(float), unit="s")
-
+        
         marker_signal_og = marker_acc_norm(trc, "IMU_PELVIS", TRC_FS)
         marker_signal = downsample_np(marker_signal_og,target_fs=IMU_FS, current_fs=TRC_FS)
         imu_signal = imu_acc_norm(sto_accel, sto_ori, "pelvis_imu")
@@ -401,7 +410,7 @@ def _process_single_trial(args):
 
         error = np.abs(marker_signal - imu_signal)
     except Exception as e:
-        print("ERROR: ",e)
+        print("ERROR: ", info, e)
     
     result = {
         "trial": trial_name,
