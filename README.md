@@ -71,6 +71,7 @@ python src/check_imu_table_test.py $OUTPUT_PATH/imu_table_test_extracted --outpu
 python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
 python src/check_imu_marker_correlation.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/untrimmed-correlation
 python src/check_imu_marker_correlation.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
+python src/check_emg.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/emg/_output
 ```
 
 ## Zip result

@@ -33,6 +33,7 @@
 #include <string>
 
 // Map from last ID number string to flipped label (Muscle_Side)
+// Snap Lead Sensor 57176.Avanti Sensor 55485.EMG 1
 std::map<std::string, std::string> idToLabel = {
     {"56697", "VL_Right"}, {"57644", "VL_Left"},
     {"57648", "RF_Right"}, {"56691", "RF_Left"},
@@ -92,13 +93,21 @@ void processC3DFile(const fs::path &filename, const fs::path &resultPath) {
           analog_table->setColumnLabel(i, "trigger");
           continue; // skip further processing for this column
         }
-        std::smatch match;
-        // std::cout << colName << std::endl;
-        if (std::regex_search(colName, match, idRegex)) {
-          std::string idNum = match.str(1);
-          // std::cout << idNum << std::endl;
-          auto it = idToLabel.find(idNum);
-          if (it != idToLabel.end()) {
+          std::vector<std::string> matches;
+
+          for (std::sregex_iterator it(colName.begin(), colName.end(), idRegex), end;
+              it != end; ++it) {
+              matches.push_back((*it).str(1)); // capture group 1
+          }
+
+          if (matches.empty()) {
+              // If ID not found in map, keep original column name
+          } else if (matches.size() > 1) {
+            std::cout << "Multiple matches found in colName: " << colName << std::endl;
+          } else {
+            // Only one match, use it
+            std::string idNum = matches[0];
+            auto it = idToLabel.find(idNum);
             std::string newLabel = it->second;
             // std::cout << newLabel << std::endl;
 
@@ -120,11 +129,6 @@ void processC3DFile(const fs::path &filename, const fs::path &resultPath) {
               newLabel = prefix + newLabel;
             }
             analog_table->setColumnLabel(i, newLabel);
-            // colNames[i] = newLabel;
-          } else {
-            // If ID not found in map, keep original column name or handle as
-            // needed For now, keep original: colNames[i] = colName;
-          }
         }
       }
     }

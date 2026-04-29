@@ -32,7 +32,7 @@ KNOWN_TRIALS = {
     "dyn_sara",
     "dyn_score",
     "half_jacks",
-    "heavy_lift",
+    # "heavy_lift",
     "jogging",
     "kettlebell",
     # "side_fly",
@@ -413,8 +413,8 @@ def _process_single_trial(args):
         print("ERROR: ", info, e)
     
     result = {
-        "trial": trial_name,
         "participant": participant,
+        "trial": trial_name,
         "error_mean": float(np.mean(error)),
         "error_std": float(np.std(error)),
         "best_lag" : float(best_lag),
@@ -472,7 +472,7 @@ def main() -> None:
     summary_df = process_motion_files(motions, output_dir)
     # summary_df = summary_df.drop("file", axis=1)
     # summary_df = summary_df.drop("df", axis=1)
-    # summary_df = summary_df.sort_values(["participant", "motion"])
+    summary_df = summary_df.sort_values(["participant", "trial"])
     print(summary_df)
     output_file = output_dir / "imu-marker-correlation.csv"
     summary_df.to_csv(output_file, index=False)
