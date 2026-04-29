@@ -99,14 +99,15 @@ void processC3DFile(const fs::path &filename, const fs::path &resultPath) {
               it != end; ++it) {
               matches.push_back((*it).str(1)); // capture group 1
           }
-
+          std::string idNum;
           if (matches.empty()) {
               // If ID not found in map, keep original column name
           } else if (matches.size() > 1) {
             std::cout << "Multiple matches found in colName: " << colName << std::endl;
+            idNum = matches[0];
           } else {
             // Only one match, use it
-            std::string idNum = matches[0];
+            idNum = matches[0];
             auto it = idToLabel.find(idNum);
             std::string newLabel = it->second;
             // std::cout << newLabel << std::endl;

@@ -273,12 +273,14 @@ def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
     baseline = signal[:baseline_len]
     noise_power = np.mean(baseline ** 2)
 
+    best_start = 0
+
     if noise_power == 0:
-        return np.inf
+        return 0, best_start
 
     # ---- FIND WINDOW WITH MAX POWER ----
     max_power = -np.inf
-    best_start = 0
+
 
     for start in range(baseline_len, len(signal) - window_size + 1, step):
         window = signal[start:start + window_size]
@@ -300,7 +302,7 @@ def plot_emg_signals(df, snr_dict, best_windows,baseline_size, window_size, save
     n_cols = len(df.columns)
     fig, axs = plt.subplots(n_cols, 1, figsize=(12, 3 * n_cols), squeeze=False)
 
-    for i, col in enumerate(df.columns):
+    for i, col in enumerate(sorted(df.columns)):
         ax = axs[i, 0]
         signal = df[col].values
 
@@ -340,7 +342,7 @@ def _process_single_trial(args):
             print(f"Missing required EMG columns: {missing}")
 
         # Keep only EMG columns
-        emg_df = analog[list(EMG_SENSORS)]
+        emg_df = analog[[col for col in EMG_SENSORS if col in analog.columns]]
         # ---- APPLY BANDPASS FILTER ----
         # https://wiki.has-motion.com/doku.php?id=visual3d:tutorials:emg:typical_emg_processing
         emg_df = butter_bandpass_filter(emg_df, lowcut=50, highcut=500, order=4)
@@ -362,15 +364,14 @@ def _process_single_trial(args):
 
     except Exception as e:
         print("ERROR: ", info, e)
-        snr_dict = {}
 
     result = {
         "participant": participant,
         "trial": trial_name,
-        "error_mean": float(np.mean(error)),
-        "error_std": float(np.std(error)),
+        # "error_mean": float(np.mean(error)),
+        # "error_std": float(np.std(error)),
         "missing": missing,
-        "snr": snr_dict,
+        **snr_dict,
     }
 
     return result
