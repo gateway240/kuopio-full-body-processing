@@ -215,7 +215,8 @@ The Xsens MT Manager 2022.2 (Movella Inc, Henderson, NV, USA) wireless IMU syste
 """
 imu_list = [
     "13 MTw Awinda wireless IMU sensors at 60 Hz on the participant",
-    "1 sensor on the bottom of the punching during the boxing trials",
+    """1 sensor on the bottom of the punching during the boxing trials 
+    (should be disabled in analysis for trials other than boxing)""",
 ]
 
 ethics = """

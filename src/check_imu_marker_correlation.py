@@ -37,8 +37,24 @@ KNOWN_TRIALS = {
     "kettlebell",
     # "side_fly",
     "squat_jumps",
-    "static_cal",
+    # "static_cal",
     "walking"
+}
+
+MARKER_PAIRS= {
+    ("IMU_PELVIS", "pelvis_imu"),
+    ("LTHI", "femur_l_imu"),
+    ("RTHI", "femur_r_imu"),
+    ("IMU_LTIB", "tibia_l_imu"),
+    ("IMU_RTIB", "tibia_r_imu"),
+    ("LTOE", "calcn_l_imu"),
+    ("RTOE", "calcn_r_imu"),
+    ("STRN", "torso_imu"),
+    ("LUPA", "humerus_l_imu"),
+    ("RUPA", "humerus_r_imu"),
+    ("LFRM", "radius_l_imu"),
+    ("RFRM", "radius_r_imu"),
+    ("RBHD", "head_imu"),
 }
 
 def _read_imu_file_without_header(
@@ -347,10 +363,9 @@ def plot_correlation(marker_signal,
 
     print(f"Saved plot to: {save_path}")
 def _process_single_trial(args):
-    participant, trial_name, info, output_dir = args
-    error = -1234
-    best_lag = -1234
-    best_corr = -1234
+    participant, trial_name, info, output_dir, marker_name, imu_name = args
+    best_lag = 0
+    best_corr = 0
     try:
         trc = read_opensim_marker_file(Path(info["trc"]),skip=3, index_col=1)
         sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
@@ -359,7 +374,7 @@ def _process_single_trial(args):
         # assume sampling rates known
         TRC_FS = 100.0
         IMU_FS = 60.0
-        CUTOFF = 30.0
+        CUTOFF = 12.0
         trc = butter_lowpass_filter(trc, cutoff=CUTOFF, order=4)
         sto_accel = butter_lowpass_filter(sto_accel, cutoff=CUTOFF, order=4)
         sto_ori = butter_lowpass_filter(sto_ori, cutoff=CUTOFF, order=4)
@@ -368,9 +383,9 @@ def _process_single_trial(args):
         sto_accel.index = pd.to_timedelta(sto_ori.index.astype(float), unit="s")
         trc.index = pd.to_timedelta(trc.index.astype(float), unit="s")
         
-        marker_signal_og = marker_acc_norm(trc, "IMU_PELVIS", TRC_FS)
+        marker_signal_og = marker_acc_norm(trc, marker_name, TRC_FS)
         marker_signal = downsample_np(marker_signal_og,target_fs=IMU_FS, current_fs=TRC_FS)
-        imu_signal = imu_acc_norm(sto_accel, sto_ori, "pelvis_imu")
+        imu_signal = imu_acc_norm(sto_accel, sto_ori, imu_name)
         n = min(len(marker_signal), len(imu_signal))
         marker_signal = marker_signal[:n]
         imu_signal = imu_signal[:n]
@@ -398,25 +413,24 @@ def _process_single_trial(args):
         # corr = best_corr
         print("Best lag:", best_lag)
         print("Max correlation:", best_corr)
-        plot_correlation(
-            x,
-            y,
-            corr,
-            lags,
-            best_corr,
-            best_lag,
-            save_path= output_dir / f"{participant}-{trial_name}-corr.png"
-        )
+        # plot_correlation(
+        #     x,
+        #     y,
+        #     corr,
+        #     lags,
+        #     best_corr,
+        #     best_lag,
+        #     save_path= output_dir / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png"
+        # )
 
-        error = np.abs(marker_signal - imu_signal)
     except Exception as e:
         print("ERROR: ", info, e)
     
     result = {
         "participant": participant,
         "trial": trial_name,
-        "error_mean": float(np.mean(error)),
-        "error_std": float(np.std(error)),
+        "marker_name": marker_name,
+        "imu_name": imu_name,
         "best_lag" : float(best_lag),
         "best_corr": float(best_corr)
     }
@@ -434,8 +448,9 @@ def process_motion_files(
     results = []
 
     tasks = [
-        (participant, trial, info, output_dir)
+        (participant, trial, info, output_dir, marker_name, imu_name)
         for (participant, trial), info in motions.items()
+        for (marker_name, imu_name) in MARKER_PAIRS
     ]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
