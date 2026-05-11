@@ -1,16 +1,16 @@
 from __future__ import annotations
-from scipy.interpolate import CubicSpline, UnivariateSpline
+from curses import window
 
 import argparse
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt, resample
+from scipy.signal import butter, filtfilt, resample, savgol_filter
 from scipy.spatial.transform import Rotation as R
 
 # max_workers: The maximum number of processes that can be used to
@@ -247,16 +247,19 @@ def collect_motion_files(root_dir: str):
 # 3. SIGNAL PROCESSING
 # ---------------------------
 def butter_lowpass_filter(
-    data: pd.DataFrame, cutoff: float, order: float
+    data: pd.DataFrame,
+    cutoff: float,
+    sampling_rate: float,
+    order: float,
+    nan_threshold=20,  # in percent
 ) -> pd.DataFrame:
     # print(data.index)
     if len(data) < 2:
         raise ValueError("Not enough samples to compute sampling rate")
 
-    dt = float(data.index[-1]) - float(data.index[0])
-    if dt <= 0:
-        raise ValueError(f"Invalid time range: dt={dt}")
-    sampling_rate = len(data) / dt
+    df = data.copy()
+    # Drop columns with exclusively NAN values
+    df = df.dropna(axis=1, how="all")
     print(f"Sampling rate: {sampling_rate} Hz")
 
     normalized_cutoff = cutoff / (sampling_rate / 2)
@@ -265,26 +268,43 @@ def butter_lowpass_filter(
     b, a = butter(order, normalized_cutoff, btype="low")
 
     exclude_cols = ["Frame#", "time", "Time"]
-    cols_to_filter = [c for c in data.columns if c not in exclude_cols]
+    cols_to_filter = [c for c in df.columns if c not in exclude_cols]
+
     # print(cols_to_filter)
     # logger.info(cols_to_filter)
+    # nan_percent = df[cols_to_filter].isna().mean() * 100
 
-    # First linear interpolation then cubic spline
-    data[cols_to_filter] = data[cols_to_filter].interpolate(
+    # high_nan_cols = nan_percent[nan_percent > nan_threshold].index
+    # low_nan_cols = nan_percent[nan_percent <= threshold].index
+    # print(high_nan_cols)
+    # First linear interpolation
+    df[cols_to_filter] = df[cols_to_filter].interpolate(
         method="linear", limit_direction="both"
     )
 
-    data[cols_to_filter] = data[cols_to_filter].interpolate(
-        method="pchip",
-        limit_direction="both"
-    )
+    # Butterworth low-pass
+    df[cols_to_filter] = filtfilt(b, a, df[cols_to_filter], axis=0)
 
-    filtered_values = filtfilt(b, a, data[cols_to_filter], axis=0)
+    # Apply a Savgol filter for a high amount of NaNs
+    # if len(high_nan_cols) > 0:
+        # Savgol smoothing
+    # window_length = 31
+    # polyorder = 3
+    # df[cols_to_filter] = savgol_filter(
+    #     df[cols_to_filter].values,
+    #     window_length=window_length,
+    #     polyorder=polyorder,
+    #     axis=0,
+    # )
+        # print("WINDOW LENGTH: " , window_length, " POLYORDER: ", polyorder)
+        # df[high_nan_cols] = savgol_filter(
+        #     df[high_nan_cols].values,
+        #     window_length=window_length,
+        #     polyorder=polyorder,
+        #     axis=0,
+        # )
 
-    filtered_df = data.copy()
-    filtered_df[cols_to_filter] = filtered_values
-
-    return filtered_df
+    return df
 
 
 def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
@@ -295,15 +315,11 @@ def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
 
 
 def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
-    n_samples = int(len(x) * target_fs / current_fs)
+    n_samples = int(round(len(x) * (target_fs / current_fs)))
     return resample(x, n_samples)
 
 
-def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
-    coords = trc[[f"{marker}_x", f"{marker}_y", f"{marker}_z"]].values
-    nan_count = np.isnan(coords).sum()
-    if nan_count > 0:
-        print("NANS", nan_count, " length: ", trc.size)
+def marker_acc_norm(coords: np.ndarray, fps=100):
     coords = coords / 1000  # mm to m
     dt = 1.0 / fps
 
@@ -344,60 +360,62 @@ def plot_correlation(
     lags,
     best_corr,
     best_lag,
+    raw_coords=None,
     coords=None,
     save_path="correlation_plot.png",
 ):
     fs = 60.0
     n = len(marker_signal)
     time = np.arange(n) / fs
-    # ---- PLOT ----
-    # Number of subplots
-    nrows = 3 if coords is not None else 2
 
-    fig, axs = plt.subplots(nrows, 1, figsize=(12, 10), sharex=False)
+    has_coords = (coords is not None) and (raw_coords is not None)
+    try:
+        # ---- CREATE SUBPLOTS ----
+        if has_coords:
+            fig, axs = plt.subplots(3, 1, figsize=(12, 12), sharex=False)
+            ax_signal, ax_corr, ax_coords = axs
+        else:
+            fig, axs = plt.subplots(2, 1, figsize=(12, 8), sharex=False)
+            ax_signal, ax_corr = axs
+            ax_coords = None
+        # ---- SIGNALS ----
+        ax_signal.plot(time, marker_signal, label="Marker")
+        ax_signal.plot(time, imu_signal, label="IMU")
 
-    # Ensure axs is always indexable
-    if nrows == 2:
-        ax_signal, ax_corr = axs
-    else:
-        ax_signal, ax_corr, ax_coords = axs
+        ax_signal.set_title(f"Signals (Best Lag={best_lag}, Best Corr={best_corr:.3f})")
+        ax_signal.set_xlabel("Time (s)")
+        ax_signal.legend()
+        ax_signal.grid()
 
-    # ---- SIGNALS ----
-    ax_signal.plot(time, marker_signal, label="Marker")
-    ax_signal.plot(time, imu_signal, label="IMU")
+        # ---- CROSS CORRELATION ----
+        ax_corr.plot(lags / fs, corr)
+        ax_corr.axvline(best_lag / fs, color="r", linestyle="--", label="Best lag")
 
-    ax_signal.set_title(f"Signals (Best Lag={best_lag}, Best Corr={best_corr:.3f})")
-    ax_signal.set_xlabel("Time (s)")
-    ax_signal.legend()
-    ax_signal.grid()
+        ax_corr.set_title("Cross-correlation")
+        ax_corr.set_xlabel("Lag (s)")
+        ax_corr.legend()
+        ax_corr.grid()
 
-    # ---- CROSS CORRELATION ----
-    print("LAGS: ", lags.size)
-    print("CORR: ", corr.size)
+        # ---- RAW + FILTERED COORDINATES (SAME SUBPLOT) ----
+        if ax_coords and raw_coords is not None and coords is not None:
+            ax_coords.plot(time, raw_coords[:, 0], label="Raw X", alpha=0.6)
+            ax_coords.plot(time, raw_coords[:, 1], label="Raw Y", alpha=0.6)
+            ax_coords.plot(time, raw_coords[:, 2], label="Raw Z", alpha=0.6)
 
-    ax_corr.plot(lags / fs, corr)
-    ax_corr.axvline(best_lag / fs, color="r", linestyle="--", label="Best lag")
+            ax_coords.plot(time, coords[:, 0], linestyle="--", label="Filtered X")
+            ax_coords.plot(time, coords[:, 1], linestyle="--", label="Filtered Y")
+            ax_coords.plot(time, coords[:, 2], linestyle="--", label="Filtered Z")
 
-    ax_corr.set_title("Cross-correlation")
-    ax_corr.set_xlabel("Lag (s)")
-    ax_corr.legend()
-    ax_corr.grid()
+            ax_coords.set_title("Raw vs Filtered Marker Coordinates")
+            ax_coords.set_xlabel("Time (s)")
+            ax_coords.set_ylabel("Position")
+            ax_coords.legend()
+            ax_coords.grid()
 
-    # ---- RAW XYZ COORDINATES ----
-    if coords is not None:
-        ax_coords.plot(time, coords[:, 0], label="X")
-        ax_coords.plot(time, coords[:, 1], label="Y")
-        ax_coords.plot(time, coords[:, 2], label="Z")
-
-        ax_coords.set_title("Raw Marker Coordinates")
-        ax_coords.set_xlabel("Time (s)")
-        ax_coords.set_ylabel("Position")
-        ax_coords.legend()
-        ax_coords.grid()
-
-    plt.tight_layout()
-    plt.savefig(save_path, dpi=300)
-    plt.close()
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=300)
+    finally:
+        plt.close("all")
 
     print(f"Saved plot to: {save_path}")
 
@@ -406,6 +424,10 @@ def _process_single_trial(args):
     participant, trial_name, info, output_dir, marker_name, imu_name = args
     best_lag = 0
     best_corr = 0
+    marker_len = 0
+    marker_nan_count = 0
+    marker_nan_percent = 0
+    marker_constant_percent = 0
     try:
         trc = read_opensim_marker_file(Path(info["trc"]), skip=3, index_col=1)
         sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
@@ -414,16 +436,42 @@ def _process_single_trial(args):
         # assume sampling rates known
         TRC_FS = 100.0
         IMU_FS = 60.0
-        CUTOFF = 12.0
-        trc = butter_lowpass_filter(trc, cutoff=CUTOFF, order=4)
-        sto_accel = butter_lowpass_filter(sto_accel, cutoff=CUTOFF, order=4)
-        sto_ori = butter_lowpass_filter(sto_ori, cutoff=CUTOFF, order=4)
-        # downsample TRC to 60 Hz
-        sto_accel.index = pd.to_timedelta(sto_accel.index.astype(float), unit="s")
-        sto_accel.index = pd.to_timedelta(sto_ori.index.astype(float), unit="s")
-        trc.index = pd.to_timedelta(trc.index.astype(float), unit="s")
+        CUTOFF = 6.0
+        raw_trc = trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]]
+        marker_len = trc.size
+        marker_nan_count = np.isnan(raw_trc.values).sum()
+        marker_nan_percent = (marker_nan_count / marker_len) * 100 if marker_len else 0
 
-        marker_signal_og = marker_acc_norm(trc, marker_name, TRC_FS)
+
+        raw_coords = raw_trc.ffill().values
+        
+        # calculate how much the marker data is constant during the trial
+        diff = np.linalg.norm(np.diff(raw_coords, axis=0), axis=1)
+        eps = 1e-5
+        is_constant = diff < eps
+        marker_constant_percent = np.mean(is_constant) * 100
+        # print("Constant percent:", marker_constant_percent)
+
+        raw_coords_downsample = downsample_np(
+            raw_coords,
+            target_fs=IMU_FS,
+            current_fs=TRC_FS,
+        )
+
+        trc_filtered = butter_lowpass_filter(
+            trc, cutoff=CUTOFF, sampling_rate=TRC_FS, order=4
+        )
+        sto_accel = butter_lowpass_filter(
+            sto_accel, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
+        )
+        sto_ori = butter_lowpass_filter(
+            sto_ori, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
+        )
+
+        coords = trc_filtered[
+            [f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]
+        ].values
+        marker_signal_og = marker_acc_norm(coords, TRC_FS)
         marker_signal = downsample_np(
             marker_signal_og, target_fs=IMU_FS, current_fs=TRC_FS
         )
@@ -456,8 +504,8 @@ def _process_single_trial(args):
         print("Best lag:", best_lag)
         print("Max correlation:", best_corr)
 
-        trc_downsample = downsample_np(
-            trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]].values,
+        coords_downsample = downsample_np(
+            coords,
             target_fs=IMU_FS,
             current_fs=TRC_FS,
         )
@@ -468,7 +516,8 @@ def _process_single_trial(args):
             lags,
             best_corr,
             best_lag,
-            coords=trc_downsample,
+            coords=coords_downsample[:n],
+            raw_coords=raw_coords_downsample[:n],
             save_path=output_dir
             / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
         )
@@ -481,6 +530,10 @@ def _process_single_trial(args):
         "trial": trial_name,
         "marker_name": marker_name,
         "imu_name": imu_name,
+        "marker_len": marker_len,
+        "marker_nan_count": marker_nan_count,
+        "marker_nan_percent": marker_nan_percent,
+        "marker_constant_percent": marker_constant_percent,
         "best_lag": float(best_lag),
         "best_corr": float(best_corr),
     }
@@ -504,15 +557,20 @@ def process_motion_files(
     ]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(_process_single_trial, t) for t in tasks]
-
-        for future in as_completed(futures):
-            results.append(future.result())
+        try:
+            results = list(executor.map(_process_single_trial, tasks))
+        except KeyboardInterrupt:
+            print("Interrupted")
+            executor.shutdown(cancel_futures=True)
+            raise
 
     return pd.DataFrame(results)
 
 
 def main() -> None:
+    # This makes a non-interactive backend to prevent memory leak
+    # see https://github.com/matplotlib/matplotlib/issues/20300
+    plt.switch_backend("agg")
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
