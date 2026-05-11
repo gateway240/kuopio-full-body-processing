@@ -23,24 +23,30 @@ MAX_WORKERS = 12
 GRAVITY = 9.82112
 
 KNOWN_TRIALS = {
-    # "back_fly",
-    "box_combos",
-    "box_jabs",
-    "crab_walking",
+    "static_cal",
+    "dyn_sara",
+    "dyn_score_hip",
+    "dyn_score_ankle",
     "crouch_lift",
     "crouch_rotate",
     "curls",
-    "dyn_sara",
-    "dyn_score",
-    "half_jacks",
-    # "heavy_lift",
-    "jogging",
     "kettlebell",
-    # "side_fly",
+    "squats_deep",
+    "half_jacks",
     "squat_jumps",
-    # "static_cal",
+    "box_jabs",
+    "box_combos",
+    # "chair_push_right",
+    # "chair_push_left",
+    # "arm_hang",
+    # "heavy_lift",
+    # "back_fly",
+    # "side_fly",
     "walking",
+    "jogging",
+    "crab_walking",
 }
+
 
 MARKER_PAIRS = {
     ("IMU_PELVIS", "pelvis_imu"),
