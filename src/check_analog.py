@@ -17,6 +17,7 @@ from scipy.signal import butter, filtfilt, resample
 MAX_WORKERS = 12
 
 EMG_SENSORS = {
+    "trigger",
     "LD_Right",
     "ST_Left",
     "LD_Left",
@@ -41,21 +42,26 @@ EMG_SENSORS = {
     "TD_Right"
 }
 KNOWN_TRIALS = {
+    "arm_hang",
     "back_fly",
     "box_combos",
     "box_jabs",
+    "chair_push_right",
+    "chair_push_left",
     "crab_walking",
     "crouch_lift",
     "crouch_rotate",
     "curls",
     "dyn_sara",
-    "dyn_score",
+    "dyn_score_hip",
+    "dyn_score_ankle",
     "half_jacks",
     "heavy_lift",
     "jogging",
     "kettlebell",
     "side_fly",
     "squat_jumps",
+    "squats_deep",
     "static_cal",
     "walking"
 }

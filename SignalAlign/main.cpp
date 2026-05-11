@@ -158,35 +158,73 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   const auto &times_orientations = orientations.getIndependentColumn();
   const auto &data = analog.getDependentColumn("trigger");
 
-  double tStart = 0.0;
-  double tEnd = times_orientations.back();
-  double threshold = 1;
+  std::optional<double> tStart;
+  std::optional<double> tEnd;
+  const double threshold = 0.5;
+  const double earlyWindow = 10.0;
+  const double minGap = 0.5; // reject noisy duplicate triggers
+
+  std::vector<double> risingEdges;
+  // Detect rising edges
   for (size_t i = 1; i < times.size(); ++i) {
-    double timestamp = times.at(i);
     double prev = data(i - 1);
     double curr = data(i);
+
     if (prev <= threshold && curr > threshold) {
-      if (tStart == 0 && timestamp < 20.0) {
-        tStart = times[i];
-      } else {
-        tEnd = times[i];
-        break;
+      double t = times[i];
+
+      // Debounce
+      if (!risingEdges.empty() && (t - risingEdges.back()) < minGap) {
+        continue;
       }
+
+      risingEdges.push_back(t);
     }
   }
-  // Fallback if end trigger is there but beginning isn't
-  const auto &back_start = tEnd - times_orientations.back();
-  if (tStart == 0 && back_start > 0) {
-    std::cout << "Falling back to end trigger: " << back_start << std::endl;
-    tStart = back_start;
-  }
-  if (tStart <= 0 || tEnd < 0 || tEnd <= tStart) {
-    std::cerr << "Invalid trigger signal in: " << analogFile
-              << " start: " << tStart << " end: " << tEnd << std::endl;
+
+  // Interpret edges
+  if (risingEdges.size() >= 2) {
+    tStart = risingEdges[0];
+    tEnd = risingEdges[1];
+  } else if (risingEdges.size() == 1) {
+    double t = risingEdges[0];
+
+    if (t < earlyWindow) {
+      // Only start trigger present
+      tStart = t;
+      tEnd = times_orientations.back();
+    } else {
+      // Only end trigger present
+      tEnd = t;
+
+      // Estimate start relative to orientation duration
+      double estimatedStart = tEnd.value() - times_orientations.back();
+      std::cout << "Calculated estimatedStart: " << estimatedStart << std::endl;
+
+      if (estimatedStart >= 0.0) {
+        tStart = estimatedStart;
+      }
+    }
+
+  } else {
+    // throw std::invalid_argument("Rising edges found: " +
+    // std::to_string(risingEdges.size()) + "\n");
+    std::cerr << "Rising edges found: " << risingEdges.size() << " "
+              << analogFile.string() << std::endl;
+    tStart = times.front();
+    tEnd = times.back();
   }
 
-  std::cout << "Trim window for '" << analogFile << "': " << tStart << "s to "
-            << tEnd << "s\n";
+  // Validation
+  if (!tStart || !tEnd || *tEnd <= *tStart) {
+    throw std::invalid_argument(
+        std::string("Invalid trigger signal in: ") +
+        " start: " + (tStart ? std::to_string(*tStart) : "none") +
+        " end: " + (tEnd ? std::to_string(*tEnd) : "none") + "\n");
+  }
+  // std::cout << "Trim window for '" << analogFile << "': " << *tStart << "s to
+  // "
+  //           << *tEnd << "s\n";
 
   // Create output directory if it doesn't exist
   fs::create_directories(outAnalog.parent_path());
@@ -194,13 +232,13 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
 
   // write IMU files
   OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
-  if (tEnd > times.back()) {
+  if (*tEnd > times.back()) {
     std::cout << "Analog shorter than IMU for " << outOrientations << std::endl;
     tEnd = times.back();
     trimAndWrite<OpenSim::STOFileAdapterQuaternion>(
-        orientations, outOrientations.string(), 0, tEnd);
+        orientations, outOrientations.string(), 0, *tEnd);
     trimAndWrite<OpenSim::STOFileAdapterVec3>(
-        accelerations, outAccelerations.string(), 0, tEnd);
+        accelerations, outAccelerations.string(), 0, *tEnd);
   } else {
     OpenSim::STOFileAdapterQuaternion::write(orientations,
                                              outOrientations.string());
@@ -208,39 +246,15 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
                                        outAccelerations.string());
   }
 
-  // const double step_size =
-  //     (tEnd - tStart) /
-  //     static_cast<double>((analog.getIndependentColumn().size() - 1));
-  // tStart = tStart - step_size;
-  // tEnd = tEnd - step_size;
-
-  // Trim and write IMU files
-  // if (recalcIMU) {
-  //   std::cout << "Starting IMU recalc!" << std::endl;
-  // const auto &time_col = orientations.getIndependentColumn();
-  // const auto &start_index = time_col.front();
-  // const auto &end_index = time_col.back();
-  // trimAndWrite<OpenSim::STOFileAdapterQuaternion>(
-  //     orientations, outOrientations.string(), time_col[start_index + 1],
-  //     time_col[end_index]);
-  // trimAndWrite<OpenSim::STOFileAdapterVec3>(
-  //     accelerations, outAccelerations.string(), time_col[start_index + 1],
-  //     time_col[end_index]);
-  // } else {
-  // OpenSim::STOFileAdapterQuaternion::write(orientations,
-  //  outOrientations.string());
-  // OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
-  // OpenSim::STOFileAdapterVec3::write(accelerations,
-  // outAccelerations.string());
-  // }
-  trimAndWrite<OpenSim::STOFileAdapter>(analog, outAnalog, tStart, tEnd);
+  trimAndWrite<OpenSim::STOFileAdapter>(analog, outAnalog, *tStart, *tEnd);
 
   OpenSim::TimeSeriesTable grf_table(grfFile.string());
-  trimAndWrite<OpenSim::STOFileAdapter>(grf_table, outGrf, tStart, tEnd);
+  trimAndWrite<OpenSim::STOFileAdapter>(grf_table, outGrf, *tStart, *tEnd);
 
   OpenSim::TimeSeriesTableVec3 marker_table(markerFile.string());
   // const auto &recalcIMU = calculateStartEnd(marker_table, tStart, tEnd);
-  trimAndWrite<OpenSim::TRCFileAdapter>(marker_table, outMarker, tStart, tEnd);
+  trimAndWrite<OpenSim::TRCFileAdapter>(marker_table, outMarker, *tStart,
+                                        *tEnd);
 }
 
 void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
