@@ -35,11 +35,11 @@ EMG_SENSORS = {
     "TT_Left",
     "DM_Left",
     "TA_Left",
-    "TD_Left",	
+    "TD_Left",
     "TT_Right",
     "DM_Right",
-    "TA_Right",	
-    "TD_Right"
+    "TA_Right",
+    "TD_Right",
 }
 KNOWN_TRIALS = {
     "arm_hang",
@@ -63,13 +63,12 @@ KNOWN_TRIALS = {
     "squat_jumps",
     "squats_deep",
     "static_cal",
-    "walking"
+    "walking",
 }
 
-def _read_file_without_header(
-    file_path: Path, sep: str = "\t"
-) -> pd.DataFrame:
-    print("Starting on: ",file_path)
+
+def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
+    print("Starting on: ", file_path)
     with open(file_path, "r") as file:
         # Skip header
         for line in file:
@@ -96,10 +95,7 @@ def _read_file_without_header(
 
         # Parse column into array
         arr = np.vstack(
-            df[col]
-            .astype(str)
-            .apply(lambda x: np.fromstring(x, sep=","))
-            .values
+            df[col].astype(str).apply(lambda x: np.fromstring(x, sep=",")).values
         )
         if arr.shape[1] == 3:
             # Create new columns
@@ -138,16 +134,12 @@ def filter_motion_trials(trials: dict, known_trials: set):
         filtered dict with only matching trials
     """
 
-
     known_set = set(known_trials)  # ensure fast lookup
 
-    filtered = {
-        key: data
-        for key, data in trials.items()
-        if key[1] in known_set
-    }
+    filtered = {key: data for key, data in trials.items() if key[1] in known_set}
 
     return filtered
+
 
 def is_versioned_trial(filename: str, suffix: str) -> bool:
     """
@@ -166,6 +158,7 @@ def is_versioned_trial(filename: str, suffix: str) -> bool:
     last_part = base.split("-")[-1]
 
     return last_part.isdigit()
+
 
 def collect_motion_files(root_dir: str):
     trials = {}
@@ -188,16 +181,18 @@ def collect_motion_files(root_dir: str):
         # match
         for trial_name, path in analog_files.items():
             # if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
-            trials[(participant,trial_name)] = {
+            trials[(participant, trial_name)] = {
                 "participant": participant,
-                "analog": path
+                "analog": path,
             }
     # print(trials)
     return trials
 
+
 # ---------------------------
 # 3. SIGNAL PROCESSING
 # ---------------------------
+
 
 def butter_bandpass_filter(
     data: pd.DataFrame,
@@ -205,7 +200,6 @@ def butter_bandpass_filter(
     highcut: float = 500.0,
     order: int = 4,
 ) -> pd.DataFrame:
-
     if len(data) < 2:
         raise ValueError("Not enough samples to compute sampling rate")
 
@@ -220,9 +214,7 @@ def butter_bandpass_filter(
     nyquist = sampling_rate / 2
 
     if highcut >= nyquist:
-        raise ValueError(
-            f"highcut ({highcut}) must be < Nyquist ({nyquist})"
-        )
+        raise ValueError(f"highcut ({highcut}) must be < Nyquist ({nyquist})")
 
     # ---- NORMALIZED FREQUENCIES ----
     low = lowcut / nyquist
@@ -237,15 +229,12 @@ def butter_bandpass_filter(
 
     # ---- HANDLE MISSING VALUES ----
     data_interp = data.copy()
-    data_interp[cols_to_filter] = (
-        data_interp[cols_to_filter]
-        .interpolate(method="linear", limit_direction="both")
+    data_interp[cols_to_filter] = data_interp[cols_to_filter].interpolate(
+        method="linear", limit_direction="both"
     )
 
     # ---- APPLY FILTER (vectorized) ----
-    filtered_values = filtfilt(
-        b, a, data_interp[cols_to_filter].values, axis=0
-    )
+    filtered_values = filtfilt(b, a, data_interp[cols_to_filter].values, axis=0)
 
     # ---- RETURN ----
     filtered_df = data.copy()
@@ -253,21 +242,23 @@ def butter_bandpass_filter(
 
     return filtered_df
 
+
 def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
     df = df.copy()
     # print(df.index)
     target_dt = pd.to_timedelta(1 / target_fs, unit="s")
-    return df.resample(rule = pd.to_timedelta(target_dt)).mean()
+    return df.resample(rule=pd.to_timedelta(target_dt)).mean()
+
 
 def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
     n_samples = int(len(x) * target_fs / current_fs)
     return resample(x, n_samples)
 
 
-
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING
 # ---------------------------
+
 
 def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
     signal = np.asarray(signal)
@@ -277,7 +268,7 @@ def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
 
     # ---- BASELINE (NOISE) ----
     baseline = signal[:baseline_len]
-    noise_power = np.mean(baseline ** 2)
+    noise_power = np.mean(baseline**2)
 
     best_start = 0
 
@@ -287,10 +278,9 @@ def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
     # ---- FIND WINDOW WITH MAX POWER ----
     max_power = -np.inf
 
-
     for start in range(baseline_len, len(signal) - window_size + 1, step):
-        window = signal[start:start + window_size]
-        power = np.mean(window ** 2)
+        window = signal[start : start + window_size]
+        power = np.mean(window**2)
 
         if power > max_power:
             max_power = power
@@ -304,7 +294,7 @@ def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
     return snr, best_start
 
 
-def plot_emg_signals(df, snr_dict, best_windows,baseline_size, window_size, save_path):
+def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, save_path):
     n_cols = len(df.columns)
     fig, axs = plt.subplots(n_cols, 1, figsize=(12, 3 * n_cols), squeeze=False)
 
@@ -316,12 +306,12 @@ def plot_emg_signals(df, snr_dict, best_windows,baseline_size, window_size, save
 
         start = 0
         end = baseline_size
-        ax.axvspan(start, end, color='green', alpha=0.3, label="Min power window")
+        ax.axvspan(start, end, color="green", alpha=0.3, label="Min power window")
 
         # Highlight best window
         start = best_windows[col]
         end = start + window_size
-        ax.axvspan(start, end, color='red', alpha=0.3, label="Max power window")
+        ax.axvspan(start, end, color="red", alpha=0.3, label="Max power window")
 
         ax.set_title(f"{col} (SNR={snr_dict[col]:.2f} dB)")
         ax.set_xlabel("Samples")
@@ -360,13 +350,17 @@ def _process_single_trial(args):
         baseline_size = 2500
         window_size = 2500
         for col in emg_df.columns:
-            snr, best_start = compute_snr(emg_df[col].values, baseline_size, window_size)
+            snr, best_start = compute_snr(
+                emg_df[col].values, baseline_size, window_size
+            )
             snr_dict[col] = snr
             best_windows[col] = best_start
 
         # ---- PLOT ----
         save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
-        plot_emg_signals(emg_df, snr_dict, best_windows,baseline_size, window_size, save_path)
+        plot_emg_signals(
+            emg_df, snr_dict, best_windows, baseline_size, window_size, save_path
+        )
 
     except Exception as e:
         print("ERROR: ", info, e)
@@ -427,7 +421,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    Path.mkdir(output_dir, parents=True,exist_ok=True)
+    Path.mkdir(output_dir, parents=True, exist_ok=True)
     motions_raw = collect_motion_files(args.source_dir)
     print(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
@@ -438,7 +432,6 @@ def main() -> None:
     print(summary_df)
     output_file = output_dir / "emg-check.csv"
     summary_df.to_csv(output_file, index=False)
-
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

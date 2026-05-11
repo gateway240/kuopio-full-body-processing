@@ -71,8 +71,8 @@ PARTICIPANT_MARKERS = {
     "LMED",
     "T10",
 }
-BAG_MARKERS =  {'BRF', 'BLF', 'BRB', 'BBS', 'BMS', 'BLB', 'BBR'}
-TOTE_MARKERS =  {'TRSB', 'TLFB', 'TLFT', 'TRFT'}
+BAG_MARKERS = {"BRF", "BLF", "BRB", "BBS", "BMS", "BLB", "BBR"}
+TOTE_MARKERS = {"TRSB", "TLFB", "TLFT", "TRFT"}
 
 
 def read_opensim_marker_file(

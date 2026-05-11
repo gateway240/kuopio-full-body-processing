@@ -13,10 +13,9 @@ import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
 
-def read_sto_file(filepath: Path)-> pd.DataFrame:
+def read_sto_file(filepath: Path) -> pd.DataFrame:
     with open(filepath, "r") as f:
         lines = f.readlines()
-
 
     # Find the last non-empty line (this contains column names)
     header_idx = None
@@ -33,15 +32,10 @@ def read_sto_file(filepath: Path)-> pd.DataFrame:
     if header_idx is None:
         raise ValueError("Could not find header line with columns.")
 
-    df = pd.read_csv(
-        filepath,
-        sep="\t",
-        skiprows=header_idx,
-        header=0,
-        index_col=0
-    )
+    df = pd.read_csv(filepath, sep="\t", skiprows=header_idx, header=0, index_col=0)
 
     return df
+
 
 def collect_motion_files(
     root_dir: str,
@@ -66,9 +60,11 @@ def collect_motion_files(
 
     return motions
 
+
 def parse_quaternion(q_str):
     """Convert string 'w,x,y,z' → list of floats"""
     return np.array([float(x) for x in q_str.split(",")])
+
 
 def quaternion_series_to_euler(series):
     """Convert a pandas Series of quaternion strings to Euler angles"""
@@ -82,6 +78,7 @@ def quaternion_series_to_euler(series):
     euler = rotations.as_euler("xyz", degrees=True)  # roll, pitch, yaw
 
     return euler
+
 
 def plot_euler(df, output_path):
     fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
@@ -115,6 +112,7 @@ def plot_euler(df, output_path):
     fig.savefig(output_path)
     plt.close(fig)
 
+
 def _process_single_file(args):
     participant, motion, f, output_dir = args
 
@@ -143,7 +141,6 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
     # group by motion first (optional but usually useful)
     for motion, motion_df in summary_df.groupby("motion"):
-
         # collect per sensor: sensor -> participant -> euler
         sensor_data = {}
 
@@ -165,14 +162,14 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
         # plot per sensor
         for sensor, participants in sensor_data.items():
-
             fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
             ax_roll, ax_pitch, ax_yaw = axes
-            
+
             sorted_participants = sorted(
                 participants.items(),
-                key=lambda x: int("".join(filter(str.isdigit, str(x[0])))) 
-                if any(c.isdigit() for c in str(x[0])) else str(x[0])
+                key=lambda x: int("".join(filter(str.isdigit, str(x[0]))))
+                if any(c.isdigit() for c in str(x[0]))
+                else str(x[0]),
             )
 
             for participant, euler in sorted_participants:
@@ -196,6 +193,7 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
             out_file = output_dir / f"{motion}_{sensor}.png"
             fig.savefig(out_file)
             plt.close(fig)
+
 
 def process_motion_files(
     motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
@@ -237,7 +235,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir,exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
@@ -247,7 +245,6 @@ def main() -> None:
     print(summary_df)
     output_file = output_dir / "imu-table-test.csv"
     summary_df.to_csv(output_file, index=False)
-
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

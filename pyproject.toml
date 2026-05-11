@@ -21,13 +21,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = [
-  'ruff==0.13.1',
-  'mypy',
-  'pre-commit',
-  'pandas-stubs',
-  'types-tabulate',
-]
+dev = ['ruff==0.13.1', 'mypy', 'pre-commit', 'pandas-stubs', 'types-tabulate']
 
 # https://pragmaticdatadev.substack.com/p/replacing-black-flake8-isort-and
 [tool.ruff]

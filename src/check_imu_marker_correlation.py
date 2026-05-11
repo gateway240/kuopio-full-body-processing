@@ -1,4 +1,5 @@
 from __future__ import annotations
+from scipy.interpolate import CubicSpline, UnivariateSpline
 
 import argparse
 import os
@@ -38,10 +39,10 @@ KNOWN_TRIALS = {
     # "side_fly",
     "squat_jumps",
     # "static_cal",
-    "walking"
+    "walking",
 }
 
-MARKER_PAIRS= {
+MARKER_PAIRS = {
     ("IMU_PELVIS", "pelvis_imu"),
     ("LTHI", "femur_l_imu"),
     ("RTHI", "femur_r_imu"),
@@ -57,10 +58,9 @@ MARKER_PAIRS= {
     ("RBHD", "head_imu"),
 }
 
-def _read_imu_file_without_header(
-    file_path: Path, sep: str = "\t"
-) -> pd.DataFrame:
-    print("Starting on: ",file_path)
+
+def _read_imu_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
+    print("Starting on: ", file_path)
     with open(file_path, "r") as file:
         # Skip header
         for line in file:
@@ -87,10 +87,7 @@ def _read_imu_file_without_header(
 
         # Parse column into array
         arr = np.vstack(
-            df[col]
-            .astype(str)
-            .apply(lambda x: np.fromstring(x, sep=","))
-            .values
+            df[col].astype(str).apply(lambda x: np.fromstring(x, sep=",")).values
         )
         if arr.shape[1] == 3:
             # Create new columns
@@ -120,7 +117,6 @@ def read_opensim_marker_file(
     skip: int = 7,
     sep: str = "\t",
 ) -> pd.DataFrame:
-
     # Read with multi-level header (two rows)
     raw = pd.read_csv(file_path, sep=sep, header=None, skiprows=skip, low_memory=False)
 
@@ -156,8 +152,10 @@ def read_opensim_marker_file(
 
     if isinstance(index_col, int):
         df = df.set_index(df.columns[index_col])
+        df.index = df.index.astype(float)
 
     return df.apply(pd.to_numeric, errors="coerce")
+
 
 # ---------------------------
 # 1. PAIR FILES BY TRIAL
@@ -174,16 +172,12 @@ def filter_motion_trials(trials: dict, known_trials: set):
         filtered dict with only matching trials
     """
 
-
     known_set = set(known_trials)  # ensure fast lookup
 
-    filtered = {
-        key: data
-        for key, data in trials.items()
-        if key[1] in known_set
-    }
+    filtered = {key: data for key, data in trials.items() if key[1] in known_set}
 
     return filtered
+
 
 def is_versioned_trial(filename: str, suffix: str) -> bool:
     """
@@ -202,6 +196,7 @@ def is_versioned_trial(filename: str, suffix: str) -> bool:
     last_part = base.split("-")[-1]
 
     return last_part.isdigit()
+
 
 def collect_motion_files(root_dir: str):
     trials = {}
@@ -234,15 +229,19 @@ def collect_motion_files(root_dir: str):
 
         # match
         for trial_name, trc_path in trc_files.items():
-            if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
-                trials[(participant,trial_name)] = {
+            if (
+                trial_name in sto_acceleration_files
+                and trial_name in sto_orientation_files
+            ):
+                trials[(participant, trial_name)] = {
                     "participant": participant,
                     "trc": trc_path,
                     "sto_acceleration": sto_acceleration_files[trial_name],
-                    "sto_orientation": sto_orientation_files[trial_name]
+                    "sto_orientation": sto_orientation_files[trial_name],
                 }
     # print(trials)
     return trials
+
 
 # ---------------------------
 # 3. SIGNAL PROCESSING
@@ -270,9 +269,14 @@ def butter_lowpass_filter(
     # print(cols_to_filter)
     # logger.info(cols_to_filter)
 
-    data[cols_to_filter] = (
-        data[cols_to_filter]
-        .interpolate(method="linear", limit_direction="both")
+    # First linear interpolation then cubic spline
+    data[cols_to_filter] = data[cols_to_filter].interpolate(
+        method="linear", limit_direction="both"
+    )
+
+    data[cols_to_filter] = data[cols_to_filter].interpolate(
+        method="pchip",
+        limit_direction="both"
     )
 
     filtered_values = filtfilt(b, a, data[cols_to_filter], axis=0)
@@ -282,11 +286,13 @@ def butter_lowpass_filter(
 
     return filtered_df
 
+
 def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
     df = df.copy()
     # print(df.index)
     target_dt = pd.to_timedelta(1 / target_fs, unit="s")
-    return df.resample(rule = pd.to_timedelta(target_dt)).mean()
+    return df.resample(rule=pd.to_timedelta(target_dt)).mean()
+
 
 def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
     n_samples = int(len(x) * target_fs / current_fs)
@@ -297,8 +303,8 @@ def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
     coords = trc[[f"{marker}_x", f"{marker}_y", f"{marker}_z"]].values
     nan_count = np.isnan(coords).sum()
     if nan_count > 0:
-        print("NANS", nan_count)
-    coords = coords / 1000 # mm to m
+        print("NANS", nan_count, " length: ", trc.size)
+    coords = coords / 1000  # mm to m
     dt = 1.0 / fps
 
     # velocity (first derivative)
@@ -312,10 +318,13 @@ def marker_acc_norm(trc: pd.DataFrame, marker="IMU_PELVIS", fps=100):
 
     return acc_norm
 
+
 def imu_acc_norm(sto_accel: pd.DataFrame, sto_ori: pd.DataFrame, acc_col: str):
     # print(sto_accel.columns.to_list())
     acc = sto_accel[[f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]].values
-    ori = sto_ori[[f"{acc_col}_w",f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]].values
+    ori = sto_ori[
+        [f"{acc_col}_w", f"{acc_col}_x", f"{acc_col}_y", f"{acc_col}_z"]
+    ].values
     r_mat = R.from_quat(ori, scalar_first=True)
     g = np.array([0, 0, GRAVITY])
     free_acc = r_mat.apply(acc) - g
@@ -324,50 +333,81 @@ def imu_acc_norm(sto_accel: pd.DataFrame, sto_ori: pd.DataFrame, acc_col: str):
     # print("IMU NORM: ", norm)
     return norm
 
+
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING
 # ---------------------------
-def plot_correlation(marker_signal,
-                     imu_signal,
-                     corr,
-                     lags,
-                     best_corr,
-                     best_lag,
-                     save_path="correlation_plot.png"):
+def plot_correlation(
+    marker_signal,
+    imu_signal,
+    corr,
+    lags,
+    best_corr,
+    best_lag,
+    coords=None,
+    save_path="correlation_plot.png",
+):
     fs = 60.0
     n = len(marker_signal)
     time = np.arange(n) / fs
     # ---- PLOT ----
-    fig, axs = plt.subplots(2, 1, figsize=(12, 8))
+    # Number of subplots
+    nrows = 3 if coords is not None else 2
 
-    axs[0].plot(time, marker_signal, label="Marker")
-    axs[0].plot(time, imu_signal, label="IMU")
-    axs[0].set_title(f"Signals (Best Lag={best_lag}, Best Corr={best_corr:.3f})")
-    axs[0].set_xlabel("Time (s)")
-    axs[0].legend()
-    axs[0].grid()
+    fig, axs = plt.subplots(nrows, 1, figsize=(12, 10), sharex=False)
 
+    # Ensure axs is always indexable
+    if nrows == 2:
+        ax_signal, ax_corr = axs
+    else:
+        ax_signal, ax_corr, ax_coords = axs
+
+    # ---- SIGNALS ----
+    ax_signal.plot(time, marker_signal, label="Marker")
+    ax_signal.plot(time, imu_signal, label="IMU")
+
+    ax_signal.set_title(f"Signals (Best Lag={best_lag}, Best Corr={best_corr:.3f})")
+    ax_signal.set_xlabel("Time (s)")
+    ax_signal.legend()
+    ax_signal.grid()
+
+    # ---- CROSS CORRELATION ----
     print("LAGS: ", lags.size)
     print("CORR: ", corr.size)
-    axs[1].plot(lags / fs, corr)
-    axs[1].axvline(best_lag / fs, color="r", linestyle="--", label="Best lag")
-    axs[1].set_title("Cross-correlation")
-    axs[1].set_xlabel("Lag (s)")
-    axs[1].legend()
-    axs[1].grid()
 
+    ax_corr.plot(lags / fs, corr)
+    ax_corr.axvline(best_lag / fs, color="r", linestyle="--", label="Best lag")
+
+    ax_corr.set_title("Cross-correlation")
+    ax_corr.set_xlabel("Lag (s)")
+    ax_corr.legend()
+    ax_corr.grid()
+
+    # ---- RAW XYZ COORDINATES ----
+    if coords is not None:
+        ax_coords.plot(time, coords[:, 0], label="X")
+        ax_coords.plot(time, coords[:, 1], label="Y")
+        ax_coords.plot(time, coords[:, 2], label="Z")
+
+        ax_coords.set_title("Raw Marker Coordinates")
+        ax_coords.set_xlabel("Time (s)")
+        ax_coords.set_ylabel("Position")
+        ax_coords.legend()
+        ax_coords.grid()
 
     plt.tight_layout()
     plt.savefig(save_path, dpi=300)
     plt.close()
 
     print(f"Saved plot to: {save_path}")
+
+
 def _process_single_trial(args):
     participant, trial_name, info, output_dir, marker_name, imu_name = args
     best_lag = 0
     best_corr = 0
     try:
-        trc = read_opensim_marker_file(Path(info["trc"]),skip=3, index_col=1)
+        trc = read_opensim_marker_file(Path(info["trc"]), skip=3, index_col=1)
         sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
         sto_ori = _read_imu_file_without_header(Path(info["sto_orientation"]))
 
@@ -382,16 +422,18 @@ def _process_single_trial(args):
         sto_accel.index = pd.to_timedelta(sto_accel.index.astype(float), unit="s")
         sto_accel.index = pd.to_timedelta(sto_ori.index.astype(float), unit="s")
         trc.index = pd.to_timedelta(trc.index.astype(float), unit="s")
-        
+
         marker_signal_og = marker_acc_norm(trc, marker_name, TRC_FS)
-        marker_signal = downsample_np(marker_signal_og,target_fs=IMU_FS, current_fs=TRC_FS)
+        marker_signal = downsample_np(
+            marker_signal_og, target_fs=IMU_FS, current_fs=TRC_FS
+        )
         imu_signal = imu_acc_norm(sto_accel, sto_ori, imu_name)
         n = min(len(marker_signal), len(imu_signal))
         marker_signal = marker_signal[:n]
         imu_signal = imu_signal[:n]
 
         # align lengths
-        print("Lengths: ",len(marker_signal), len(imu_signal))
+        print("Lengths: ", len(marker_signal), len(imu_signal))
         # Normalized cross correlation
         print("marker:", marker_signal.shape)
         print("imu:", imu_signal.shape)
@@ -413,26 +455,34 @@ def _process_single_trial(args):
         # corr = best_corr
         print("Best lag:", best_lag)
         print("Max correlation:", best_corr)
-        # plot_correlation(
-        #     x,
-        #     y,
-        #     corr,
-        #     lags,
-        #     best_corr,
-        #     best_lag,
-        #     save_path= output_dir / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png"
-        # )
+
+        trc_downsample = downsample_np(
+            trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]].values,
+            target_fs=IMU_FS,
+            current_fs=TRC_FS,
+        )
+        plot_correlation(
+            x,
+            y,
+            corr,
+            lags,
+            best_corr,
+            best_lag,
+            coords=trc_downsample,
+            save_path=output_dir
+            / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+        )
 
     except Exception as e:
         print("ERROR: ", info, e)
-    
+
     result = {
         "participant": participant,
         "trial": trial_name,
         "marker_name": marker_name,
         "imu_name": imu_name,
-        "best_lag" : float(best_lag),
-        "best_corr": float(best_corr)
+        "best_lag": float(best_lag),
+        "best_corr": float(best_corr),
     }
 
     return result
@@ -480,7 +530,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    Path.mkdir(output_dir,exist_ok=True)
+    Path.mkdir(output_dir, exist_ok=True)
     motions_raw = collect_motion_files(args.source_dir)
     print(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
@@ -491,7 +541,6 @@ def main() -> None:
     print(summary_df)
     output_file = output_dir / "imu-marker-correlation.csv"
     summary_df.to_csv(output_file, index=False)
-
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

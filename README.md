@@ -1,7 +1,7 @@
 # Kuopio Full Body Processing
 
 These scripts transform the raw Vicon and Xsens data into formats usable
-in OpenSim. 
+in OpenSim.
 
 ## Python processing
 

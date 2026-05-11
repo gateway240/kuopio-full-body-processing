@@ -7,16 +7,13 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.spatial.transform import Rotation as R
 
 
-def read_file(filepath: Path)-> pd.DataFrame:
+def read_file(filepath: Path) -> pd.DataFrame:
     with open(filepath, "r") as f:
         lines = f.readlines()
-
 
     # Find the last non-empty line (this contains column names)
     header_idx = None
@@ -34,15 +31,10 @@ def read_file(filepath: Path)-> pd.DataFrame:
     if header_idx is None:
         raise ValueError("Could not find header line with columns.")
 
-    df = pd.read_csv(
-        filepath,
-        sep="\t",
-        skiprows=header_idx,
-        header=0,
-        index_col=0
-    )
+    df = pd.read_csv(filepath, sep="\t", skiprows=header_idx, header=0, index_col=0)
 
     return df
+
 
 def collect_motion_files(
     root_dir: str,
@@ -66,6 +58,7 @@ def collect_motion_files(
             motions[(participant, motion)].append(path)
 
     return motions
+
 
 def validate_motion_df(df: pd.DataFrame, file_path: str):
     errors = []
@@ -93,10 +86,7 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
     bad_steps = diff[~valid_step]
 
     if not bad_steps.empty:
-        missing_frames = [
-            (packet.iloc[i - 1], packet.iloc[i])
-            for i in bad_steps.index
-        ]
+        missing_frames = [(packet.iloc[i - 1], packet.iloc[i]) for i in bad_steps.index]
 
         errors.append(f"Missing frames detected: {missing_frames}")
 
@@ -104,8 +94,7 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
 
     if not overflow_events.empty:
         overflow_list = [
-            (packet.iloc[i - 1], packet.iloc[i])
-            for i in overflow_events.index
+            (packet.iloc[i - 1], packet.iloc[i]) for i in overflow_events.index
         ]
         errors.append(f"PacketCounter overflow detected: {overflow_list}")
 
@@ -122,6 +111,7 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
         )
 
     return errors
+
 
 def _process_single_file(args):
     participant, motion, f, output_dir = args
@@ -141,8 +131,10 @@ def _process_single_file(args):
         "motion": motion,
         "file": f,
         "df": df,
-        "errors": errors
+        "errors": errors,
     }
+
+
 def process_motion_files(
     motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
 ) -> pd.DataFrame:
@@ -182,7 +174,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir,exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
@@ -193,7 +185,6 @@ def main() -> None:
     print(summary_df)
     output_file = output_dir / "imu-continuity-test.csv"
     summary_df.to_csv(output_file, index=False)
-
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 
