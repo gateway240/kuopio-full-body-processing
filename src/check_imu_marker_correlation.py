@@ -453,10 +453,10 @@ def _process_single_trial(args):
         
         # calculate how much the marker data is constant during the trial
         diff = np.linalg.norm(np.diff(raw_coords, axis=0), axis=1)
-        eps = 1e-5
+        eps = 0.1 #mm
         is_constant = diff < eps
-        marker_constant_percent = np.mean(is_constant) * 100
-        # print("Constant percent:", marker_constant_percent)
+        marker_constant_percent = (np.sum(is_constant) / is_constant.size) * 100
+        print("Constant percent:", marker_constant_percent)
 
         raw_coords_downsample = downsample_np(
             raw_coords,
