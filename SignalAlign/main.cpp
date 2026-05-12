@@ -161,7 +161,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   std::optional<double> tStart;
   std::optional<double> tEnd;
   const double threshold = 0.5;
-  const double earlyWindow = 5.0; 
+  const double earlyWindow = 5.0;
   const double minGap = 0.5; // reject noisy duplicate triggers
 
   std::vector<double> risingEdges;
@@ -183,7 +183,13 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   }
 
   // Interpret edges
-  if (risingEdges.size() >= 2) {
+  // std::cout << "Trial: " << trialName << " " << "Number: " << numberDir.stem().string() << std::endl;
+  if (trialName == "jogging" && numberDir.stem().string() == "08") {
+    // Need to ignore the first rising edge for this one because it wasn't accurate.
+    std::cout << "Special handling for 08 jogging trial!" << std::endl;
+    tEnd = risingEdges[1] - 0.0333; // 2 frames back
+    tStart = tEnd.value() - times_orientations.back();
+  } else if (risingEdges.size() >= 2) {
     tStart = risingEdges[0];
     tEnd = risingEdges[1];
   } else if (risingEdges.size() == 1) {
