@@ -56,7 +56,7 @@ MARKER_PAIRS = {
     ("IMU_RTIB", "tibia_r_imu"),
     ("LTOE", "calcn_l_imu"),
     ("RTOE", "calcn_r_imu"),
-    ("STRN", "torso_imu"),
+    ("CLAV", "torso_imu"),
     ("LUPA", "humerus_l_imu"),
     ("RUPA", "humerus_r_imu"),
     ("LFRM", "radius_l_imu"),

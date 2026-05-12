@@ -12,4 +12,4 @@
 11,"00B42D46","radius_l_imu","left","forearm"
 12,"00B42D4F","radius_r_imu","right","forearm"
 13,"00B42D4B","head_imu",,"head"
-14,"00B42D54","punching_bag_imu",,"punching bag"
+*14,"00B42D54","punching_bag_imu",,"punching bag"

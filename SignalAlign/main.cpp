@@ -161,7 +161,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   std::optional<double> tStart;
   std::optional<double> tEnd;
   const double threshold = 0.5;
-  const double earlyWindow = 10.0;
+  const double earlyWindow = 5.0; 
   const double minGap = 0.5; // reject noisy duplicate triggers
 
   std::vector<double> risingEdges;
