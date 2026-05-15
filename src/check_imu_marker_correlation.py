@@ -510,23 +510,23 @@ def _process_single_trial(args):
         print("Best lag:", best_lag)
         print("Max correlation:", best_corr)
 
-        coords_downsample = downsample_np(
-            coords,
-            target_fs=IMU_FS,
-            current_fs=TRC_FS,
-        )
-        plot_correlation(
-            x,
-            y,
-            corr,
-            lags,
-            best_corr,
-            best_lag,
-            coords=coords_downsample[:n],
-            raw_coords=raw_coords_downsample[:n],
-            save_path=output_dir
-            / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
-        )
+        # coords_downsample = downsample_np(
+        #     coords,
+        #     target_fs=IMU_FS,
+        #     current_fs=TRC_FS,
+        # )
+        # plot_correlation(
+        #     x,
+        #     y,
+        #     corr,
+        #     lags,
+        #     best_corr,
+        #     best_lag,
+        #     coords=coords_downsample[:n],
+        #     raw_coords=raw_coords_downsample[:n],
+        #     save_path=output_dir
+        #     / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+        # )
 
     except Exception as e:
         print("ERROR: ", info, e)

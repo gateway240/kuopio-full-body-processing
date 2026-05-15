@@ -59,7 +59,7 @@ python src/check_dataset.py $OUTPUT_PATH/s02_extracted
  cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=on
  cd build
  make -j$(nproc)
-./main $OUTPUT_PATH/s02_extracted $OUTPUT_PATH/s03_aligned
+./main "$OUTPUT_PATH/s02_extracted" "$OUTPUT_PATH/s03_aligned" 2>&1 | tee "output_$(date +%Y%m%d_%H%M%S).txt"
 ```
 Add files manually if match doesn't exist (e.g. IMU wasn't recorded)
 
