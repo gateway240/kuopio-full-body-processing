@@ -59,10 +59,12 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   const size_t &after_start = table.getRowIndexAfterTime(tStart);
   const size_t &after_end = table.getRowIndexAfterTime(tEnd);
 
-  const size_t &start_index = before_start;
-  const size_t &end_index = before_end;
+  const size_t &after_diff = after_start - before_start;
+  const size_t &before_diff = after_end - before_end;
 
-  if (after_start - before_start != 0 || after_end - before_end != 0) {
+  size_t start_index = before_start;
+  size_t end_index = before_end;
+  if (after_diff != 0 || before_diff != 0) {
     std::cout << "File: " << outFile << " Target start: " << tStart
               << " After start: " << timeCol[after_start] << " (+ "
               << timeCol[after_start] - tStart << ")"
@@ -87,7 +89,7 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   // CANNOT use table.trim because it uses the "next" time.
   // we need the closest time to avoid the off by 1 issue
   table.trimToIndices(start_index, end_index);
-  const double t0 = table.getIndependentColumn().front();
+  const auto& t0 = table.getIndependentColumn().front();
   const auto &length = table.getNumRows();
   const auto &ind_col = table.getIndependentColumn();
   for (size_t i = 0; i < length; ++i) {
@@ -97,13 +99,13 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   A::write(table, outFile.string());
   // std::cout << "Trimmed and saved: " << outFile << std::endl;
   // Get new time range
-  const auto &newTimes = table.getIndependentColumn();
-  if (newTimes.empty()) {
-    std::cerr << "Warning: Trimmed table is empty." << std::endl;
-    return {-1.0, -1.0};
-  }
-  double newStart = newTimes.front();
-  double newEnd = newTimes.back();
+  // const auto &newTimes = table.getIndependentColumn();
+  // if (newTimes.empty()) {
+  //   std::cerr << "Warning: Trimmed table is empty." << std::endl;
+  //   return {-1.0, -1.0};
+  // }
+  // double newStart = newTimes.front();
+  // double newEnd = newTimes.back();
   // std::cout << "New start: " << newStart << " New end: " << newEnd <<
   // std::endl;
   return {timeCol[start_index], timeCol[end_index]};
@@ -210,7 +212,8 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
 
       // Estimate start relative to orientation duration
       double estimatedStart = tEnd.value() - times_orientations.back();
-      // std::cout << "Calculated estimatedStart: " << estimatedStart << std::endl;
+      // std::cout << "Calculated estimatedStart: " << estimatedStart <<
+      // std::endl;
 
       if (estimatedStart >= 0.0) {
         tStart = estimatedStart;
@@ -341,6 +344,6 @@ int main(int argc, char *argv[]) {
                    .count()
             << "[µs]" << std::endl;
   std::cout << "Results Saved to directory: " << outputPath << std::endl;
-  std::cout << "Finished Running without Error!" << std::endl;
+  std::cout << "Finished Running!" << std::endl;
   return 0;
 }

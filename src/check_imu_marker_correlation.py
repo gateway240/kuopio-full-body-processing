@@ -1,5 +1,4 @@
 from __future__ import annotations
-from curses import window
 
 import argparse
 import os
@@ -10,17 +9,26 @@ from typing import Dict
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt, resample, savgol_filter
+from scipy.signal import butter, filtfilt, resample
 from scipy.spatial.transform import Rotation as R
 
 # max_workers: The maximum number of processes that can be used to
 #     execute the given calls. If None or not given then as many
 #     worker processes will be created as the machine has processors.
-MAX_WORKERS = 12
+# MAX_WORKERS = 12
+MAX_WORKERS = None
 # Latitude: 62.8929513
 # Height: 85 m above sea level
 # https://www.sensorsone.com/local-gravity-calculator/
 GRAVITY = 9.82112
+
+# Known for data
+TRC_FS = 100.0
+IMU_FS = 60.0
+# For Low Pass Filtering
+CUTOFF = 6.0
+
+PLOT_RESULTS = False
 
 KNOWN_TRIALS = {
     "static_cal",
@@ -257,7 +265,6 @@ def butter_lowpass_filter(
     cutoff: float,
     sampling_rate: float,
     order: float,
-    nan_threshold=20,  # in percent
 ) -> pd.DataFrame:
     # print(data.index)
     if len(data) < 2:
@@ -290,25 +297,6 @@ def butter_lowpass_filter(
 
     # Butterworth low-pass
     df[cols_to_filter] = filtfilt(b, a, df[cols_to_filter], axis=0)
-
-    # Apply a Savgol filter for a high amount of NaNs
-    # if len(high_nan_cols) > 0:
-        # Savgol smoothing
-    # window_length = 31
-    # polyorder = 3
-    # df[cols_to_filter] = savgol_filter(
-    #     df[cols_to_filter].values,
-    #     window_length=window_length,
-    #     polyorder=polyorder,
-    #     axis=0,
-    # )
-        # print("WINDOW LENGTH: " , window_length, " POLYORDER: ", polyorder)
-        # df[high_nan_cols] = savgol_filter(
-        #     df[high_nan_cols].values,
-        #     window_length=window_length,
-        #     polyorder=polyorder,
-        #     axis=0,
-        # )
 
     return df
 
@@ -426,8 +414,10 @@ def plot_correlation(
     print(f"Saved plot to: {save_path}")
 
 
-def _process_single_trial(args):
-    participant, trial_name, info, output_dir, marker_name, imu_name = args
+def _calculate_single_trial(args):
+    info, output_dir, marker_name, imu_name = args
+    participant = info["participant"]
+    trial_name = info["trial_name"]
     best_lag = 0
     best_corr = 0
     marker_len = 0
@@ -435,25 +425,19 @@ def _process_single_trial(args):
     marker_nan_percent = 0
     marker_constant_percent = 0
     try:
-        trc = read_opensim_marker_file(Path(info["trc"]), skip=3, index_col=1)
-        sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
-        sto_ori = _read_imu_file_without_header(Path(info["sto_orientation"]))
-
+        trc = info["raw_trc"]
         # assume sampling rates known
-        TRC_FS = 100.0
-        IMU_FS = 60.0
-        CUTOFF = 6.0
+
         raw_trc = trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]]
         marker_len = trc.size
         marker_nan_count = np.isnan(raw_trc.values).sum()
         marker_nan_percent = (marker_nan_count / marker_len) * 100 if marker_len else 0
 
-
         raw_coords = raw_trc.ffill().values
-        
+
         # calculate how much the marker data is constant during the trial
         diff = np.linalg.norm(np.diff(raw_coords, axis=0), axis=1)
-        eps = 0.1 #mm
+        eps = 0.1  # mm
         is_constant = diff < eps
         marker_constant_percent = (np.sum(is_constant) / is_constant.size) * 100
         print("Constant percent:", marker_constant_percent)
@@ -464,15 +448,9 @@ def _process_single_trial(args):
             current_fs=TRC_FS,
         )
 
-        trc_filtered = butter_lowpass_filter(
-            trc, cutoff=CUTOFF, sampling_rate=TRC_FS, order=4
-        )
-        sto_accel = butter_lowpass_filter(
-            sto_accel, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
-        )
-        sto_ori = butter_lowpass_filter(
-            sto_ori, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
-        )
+        trc_filtered = info["filtered_trc"]
+        sto_accel = info["filtered_sto_accel"]
+        sto_ori = info["filtered_sto_ori"]
 
         coords = trc_filtered[
             [f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]
@@ -510,23 +488,24 @@ def _process_single_trial(args):
         print("Best lag:", best_lag)
         print("Max correlation:", best_corr)
 
-        # coords_downsample = downsample_np(
-        #     coords,
-        #     target_fs=IMU_FS,
-        #     current_fs=TRC_FS,
-        # )
-        # plot_correlation(
-        #     x,
-        #     y,
-        #     corr,
-        #     lags,
-        #     best_corr,
-        #     best_lag,
-        #     coords=coords_downsample[:n],
-        #     raw_coords=raw_coords_downsample[:n],
-        #     save_path=output_dir
-        #     / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
-        # )
+        if PLOT_RESULTS:
+            coords_downsample = downsample_np(
+                coords,
+                target_fs=IMU_FS,
+                current_fs=TRC_FS,
+            )
+            plot_correlation(
+                x,
+                y,
+                corr,
+                lags,
+                best_corr,
+                best_lag,
+                coords=coords_downsample[:n],
+                raw_coords=raw_coords_downsample[:n],
+                save_path=output_dir
+                / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+            )
 
     except Exception as e:
         print("ERROR: ", info, e)
@@ -547,6 +526,39 @@ def _process_single_trial(args):
     return result
 
 
+def _process_single_trial(args):
+    participant, trial_name, info= args
+    try:
+        trc = read_opensim_marker_file(Path(info["trc"]), skip=3, index_col=1)
+        sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
+        sto_ori = _read_imu_file_without_header(Path(info["sto_orientation"]))
+
+
+        trc_filtered = butter_lowpass_filter(
+            trc, cutoff=CUTOFF, sampling_rate=TRC_FS, order=4
+        )
+        sto_accel = butter_lowpass_filter(
+            sto_accel, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
+        )
+        sto_ori = butter_lowpass_filter(
+            sto_ori, cutoff=CUTOFF, sampling_rate=IMU_FS, order=4
+        )
+
+    except Exception as e:
+        print("ERROR: ", info, e)
+
+    return {
+        "participant": participant,
+        "trial_name": trial_name,
+        "raw_trc": trc,
+        "raw_sto_accel": sto_accel,
+        "raw_sto_ori": sto_ori,
+        "filtered_trc": trc_filtered,
+        "filtered_sto_accel" : sto_accel,
+        "filtered_sto_ori": sto_ori,
+    }
+
+
 # ---------------------------
 # 5. PIPELINE
 # ---------------------------
@@ -554,17 +566,20 @@ def process_motion_files(
     motions: Dict,
     output_dir: Path,
 ):
-    results = []
-
-    tasks = [
-        (participant, trial, info, output_dir, marker_name, imu_name)
+    tasks_stage1 = [
+        (participant, trial, info)
         for (participant, trial), info in motions.items()
-        for (marker_name, imu_name) in MARKER_PAIRS
     ]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
         try:
-            results = list(executor.map(_process_single_trial, tasks))
+            results_stage1 = list(executor.map(_process_single_trial, tasks_stage1))
+            tasks_stage2 = [
+                (info, output_dir, marker_name, imu_name)
+                for  info in results_stage1
+                for (marker_name, imu_name) in MARKER_PAIRS
+            ]
+            results = list(executor.map(_calculate_single_trial, tasks_stage2))
         except KeyboardInterrupt:
             print("Interrupted")
             executor.shutdown(cancel_futures=True)
