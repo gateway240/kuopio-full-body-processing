@@ -59,29 +59,27 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   const size_t &after_start = table.getRowIndexAfterTime(tStart);
   const size_t &after_end = table.getRowIndexAfterTime(tEnd);
 
-  const size_t &start_index = after_start;
+  const size_t &start_index = before_start;
   const size_t &end_index = before_end;
 
   if (after_start - before_start != 0 || after_end - before_end != 0) {
     std::cout << "File: " << outFile << " Target start: " << tStart
-              << " After start: " << timeCol[after_start]
-              << " (+ " << timeCol[after_start] - tStart << ")"
+              << " After start: " << timeCol[after_start] << " (+ "
+              << timeCol[after_start] - tStart << ")"
               << " Closest time: " << timeCol[closest_start]
-              << " Before time: " << timeCol[before_start]
-              << " (- " << tStart - timeCol[before_start] << ")"
-              << " start index " << start_index
-              << " closest start " << closest_start
-              << " before start " << before_start
+              << " Before time: " << timeCol[before_start] << " (- "
+              << tStart - timeCol[before_start] << ")"
+              << " start index " << start_index << " closest start "
+              << closest_start << " before start " << before_start
               << " diff: " << after_start - before_start << std::endl;
     std::cout << "File: " << outFile << " Target end: " << tEnd
-              << " After end: " << timeCol[after_end]
-              << " (+ " << timeCol[after_end] - tEnd << ")"
+              << " After end: " << timeCol[after_end] << " (+ "
+              << timeCol[after_end] - tEnd << ")"
               << " Closest time: " << timeCol[closest_end]
-              << " Before time: " << timeCol[before_end]
-              << " (- " << tEnd - timeCol[before_end] << ")"
-              << " start index " << end_index
-              << " closest start " << closest_end
-              << " before start " << before_end
+              << " Before time: " << timeCol[before_end] << " (- "
+              << tEnd - timeCol[before_end] << ")"
+              << " start index " << end_index << " closest start "
+              << closest_end << " before start " << before_end
               << " diff: " << after_end - before_end << std::endl;
   }
 
@@ -91,12 +89,13 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   table.trimToIndices(start_index, end_index);
   const double t0 = table.getIndependentColumn().front();
   const auto &length = table.getNumRows();
+  const auto &ind_col = table.getIndependentColumn();
   for (size_t i = 0; i < length; ++i) {
-    table.setIndependentValueAtIndex(i, table.getIndependentColumn()[i] - t0);
+    table.setIndependentValueAtIndex(i, ind_col[i] - t0);
   }
 
   A::write(table, outFile.string());
-  std::cout << "Trimmed and saved: " << outFile << std::endl;
+  // std::cout << "Trimmed and saved: " << outFile << std::endl;
   // Get new time range
   const auto &newTimes = table.getIndependentColumn();
   if (newTimes.empty()) {
@@ -105,8 +104,9 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   }
   double newStart = newTimes.front();
   double newEnd = newTimes.back();
-  std::cout << "New start: " << newStart << " New end: " << newEnd << std::endl;
-  return {newStart, newEnd};
+  // std::cout << "New start: " << newStart << " New end: " << newEnd <<
+  // std::endl;
+  return {timeCol[start_index], timeCol[end_index]};
 }
 
 // Process a single trial
@@ -185,16 +185,16 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
     }
   }
 
+  // Need to drop the first edge for this one because it wasn't accurate.
+  if (trialName == "jogging" && numberDir.stem().string() == "08") {
+    std::cout << "Special handling for 08 jogging trial!" << std::endl;
+    risingEdges.erase(risingEdges.begin());
+  }
+
   // Interpret edges
   // std::cout << "Trial: " << trialName << " " << "Number: " <<
   // numberDir.stem().string() << std::endl;
-  // Need to ignore the first edge for this one because it wasn't accurate.
-  constexpr double imuDt = 1.0 / 60.0;
-  if (trialName == "jogging" && numberDir.stem().string() == "08") {
-    std::cout << "Special handling for 08 jogging trial!" << std::endl;
-    tEnd = risingEdges[1] - (2 * imuDt); // second edge 2 frames back
-    tStart = tEnd.value() - times_orientations.back();
-  } else if (risingEdges.size() >= 2) {
+  if (risingEdges.size() >= 2) {
     tStart = risingEdges[0];
     tEnd = risingEdges[1];
   } else if (risingEdges.size() == 1) {
@@ -210,7 +210,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
 
       // Estimate start relative to orientation duration
       double estimatedStart = tEnd.value() - times_orientations.back();
-      std::cout << "Calculated estimatedStart: " << estimatedStart << std::endl;
+      // std::cout << "Calculated estimatedStart: " << estimatedStart << std::endl;
 
       if (estimatedStart >= 0.0) {
         tStart = estimatedStart;
@@ -233,10 +233,6 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   const double rawStart = *tStart;
   const double rawEnd = *tEnd;
 
-  // std::cout << "Trim window for '" << analogFile << "': " << *tStart << "s to
-  // "
-  //           << *tEnd << "s\n";
-
   // Create output directory if it doesn't exist
   fs::create_directories(outAnalog.parent_path());
   fs::create_directories(outOrientations.parent_path());
@@ -247,15 +243,27 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
                                            outOrientations.string());
   OpenSim::STOFileAdapterVec3::write(accelerations, outAccelerations.string());
 
-  trimAndWrite<OpenSim::STOFileAdapter>(analog, outAnalog, rawStart, rawEnd);
+  // Trim markers (100 Hz) and get new cut time
+  OpenSim::TimeSeriesTableVec3 marker_table(markerFile.string());
+  const auto [markerStart, markerEnd] = trimAndWrite<OpenSim::TRCFileAdapter>(
+      marker_table, outMarker, rawStart, rawEnd);
+
+  const auto &imu_elapsed =
+      times_orientations.back() - times_orientations.front();
+  const auto &marker_elapsed = markerEnd - markerStart;
+  std::cout << "File: " << markerFile.string()
+            << " Raw elapsed: " << *tEnd - *tStart
+            << " IMU elapsed: " << imu_elapsed
+            << " Marker elapsed: " << marker_elapsed
+            << " diff: " << marker_elapsed - imu_elapsed << std::endl;
+
+  // Trim analog and grf (2400 Hz) signals to same time
+  trimAndWrite<OpenSim::STOFileAdapter>(analog, outAnalog, markerStart,
+                                        markerEnd);
 
   OpenSim::TimeSeriesTable grf_table(grfFile.string());
-  trimAndWrite<OpenSim::STOFileAdapter>(grf_table, outGrf, rawStart, rawEnd);
-
-  OpenSim::TimeSeriesTableVec3 marker_table(markerFile.string());
-  // const auto &recalcIMU = calculateStartEnd(marker_table, tStart, tEnd);
-  trimAndWrite<OpenSim::TRCFileAdapter>(marker_table, outMarker, rawStart,
-                                        rawEnd);
+  trimAndWrite<OpenSim::STOFileAdapter>(grf_table, outGrf, markerStart,
+                                        markerEnd);
 }
 
 void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
