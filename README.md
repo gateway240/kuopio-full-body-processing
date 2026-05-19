@@ -74,11 +74,15 @@ Check results:
 ```bash
 python src/check_dataset.py $OUTPUT_PATH/s03_aligned
 python src/check_optical_data.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH/technical_validation
-python src/check_imu_table_test.py $OUTPUT_PATH/imu_table_test_extracted --output_dir $OUTPUT_PATH/technical_validation
+python src/check_imu_table_test.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/technical_validation
 python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/technical_validation
 python src/check_imu_marker_correlation.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
-python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH/emg/_output
 python src/check_analog.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+```
+
+Debugging
+```bash
+python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH/emg/_output
 ```
 
 ## Zip result

@@ -30,6 +30,19 @@ VALID_SUFFIXES = [
     "_orientations.sto",
 ]
 
+VALID_EXTENSIONS = {
+    ".c3d",
+    ".csv",
+    ".mtb",
+    ".sto",
+    ".system",
+    ".trc",
+    ".txt",
+    ".x1d",
+    ".x2d",
+    ".xcp",
+}
+
 MODALITIES = ["imu", "mocap"]
 
 
@@ -37,8 +50,11 @@ def safe_dirs(path: Path):
     return sorted([p for p in path.iterdir() if p.is_dir() and p.name not in IGNORED])
 
 
+def is_allowed(f: Path):
+    return f.suffix.lower() in VALID_EXTENSIONS
+
+
 def group_key(f: Path):
-    # same logic you already had (simplified)
     name = f.name
 
     for suf in VALID_SUFFIXES:
@@ -91,7 +107,7 @@ def emit_grouped_files(
             continue
 
         for f in mod_path.iterdir():
-            if f.is_file() and f.name not in IGNORED:
+            if f.is_file() and f.name not in IGNORED and is_allowed(f):
                 groups[group_key(f)].append(f)
 
     for g in sorted(groups):
@@ -118,7 +134,11 @@ def build(root: Path, lines, font_size):
     root_id = node_id(root.name)
     emit_node(lines, root_id, f"{FOLDER_ICON} {root.name}", font_size)
 
-    root_files = [f for f in root.iterdir() if f.is_file() and f.name not in IGNORED]
+    root_files = [
+        f
+        for f in root.iterdir()
+        if f.is_file() and f.name not in IGNORED and is_allowed(f)
+    ]
     emit_raw_files(lines, root_id, root_files, root.name, None, font_size)
 
     for session in safe_dirs(root):
@@ -127,7 +147,9 @@ def build(root: Path, lines, font_size):
         emit(lines, root_id, sid)
 
         session_files = [
-            f for f in session.iterdir() if f.is_file() and f.name not in IGNORED
+            f
+            for f in session.iterdir()
+            if f.is_file() and f.name not in IGNORED and is_allowed(f)
         ]
         emit_raw_files(lines, sid, session_files, root.name, session.name, font_size)
 
