@@ -431,7 +431,7 @@ def main() -> None:
     # summary_df = summary_df.drop("df", axis=1)
     summary_df = summary_df.sort_values(["participant", "trial"])
     print(summary_df)
-    output_file = output_dir / "emg-check.csv"
+    output_file = output_dir / "emg-snr.csv"
     summary_df.to_csv(output_file, index=False)
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")

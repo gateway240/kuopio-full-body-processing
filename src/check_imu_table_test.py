@@ -14,6 +14,9 @@ from scipy.spatial.transform import Rotation as R
 
 TEST_FILENAME = "table_test_orientations.sto"
 
+PLOT_RESULTS = False
+
+
 def read_sto_file(filepath: Path) -> pd.DataFrame:
     print("Starting on: ", filepath)
     with open(filepath, "r") as file:
@@ -111,7 +114,8 @@ def _process_single_file(args):
 
     output_file = output_dir / f"{participant}.png"
 
-    plot_euler(df, output_file)
+    if PLOT_RESULTS:
+        plot_euler(df, output_file)
 
     return {
         "participant": participant,
@@ -202,7 +206,8 @@ def process_motion_files(
             summary_rows.append(future.result())
 
     summary_df = pd.DataFrame(summary_rows)
-    aggregate_and_plot(summary_df, output_dir)
+    if PLOT_RESULTS:
+        aggregate_and_plot(summary_df, output_dir)
     return summary_df
 
 
