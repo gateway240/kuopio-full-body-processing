@@ -16,8 +16,10 @@ from scipy.signal import butter, filtfilt, resample
 #     worker processes will be created as the machine has processors.
 MAX_WORKERS = 12
 
+PLOT_RESULTS = False
+
 EMG_SENSORS = {
-    "trigger",
+    # "trigger",
     "LD_Right",
     "ST_Left",
     "LD_Left",
@@ -327,7 +329,7 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
 
 def _process_single_trial(args):
     participant, trial_name, info, output_dir = args
-    error = -1234
+    snr_dict = {}
     missing = {}
     try:
         analog = _read_file_without_header(Path(info["analog"]))
@@ -344,7 +346,6 @@ def _process_single_trial(args):
         emg_df = butter_bandpass_filter(emg_df, lowcut=50, highcut=500, order=4)
 
         # ---- COMPUTE SNR ----
-        snr_dict = {}
         best_windows = {}
 
         baseline_size = 2500
@@ -356,11 +357,11 @@ def _process_single_trial(args):
             snr_dict[col] = snr
             best_windows[col] = best_start
 
-        # ---- PLOT ----
-        save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
-        plot_emg_signals(
-            emg_df, snr_dict, best_windows, baseline_size, window_size, save_path
-        )
+        if PLOT_RESULTS:
+            save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
+            plot_emg_signals(
+                emg_df, snr_dict, best_windows, baseline_size, window_size, save_path
+            )
 
     except Exception as e:
         print("ERROR: ", info, e)

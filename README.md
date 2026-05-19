@@ -23,13 +23,6 @@ python src/generate-readme.py --output_dir $OUTPUT_PATH --table_fmt github
 python src/generate-readme.py --output_dir out --doc_fmt html
 ```
 
-## Graph Directory Structure
-
-```bash
-python src/dir_to_graph_v3.py $OUTPUT_PATH --font-size 60
-d2 dataset_graph.d2 dataset_graph.png 
-```
-
 ## OpenSim
 For autocomplete to work:
 ```bash
@@ -84,6 +77,12 @@ Debugging
 ```bash
 python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH/emg/_output
 ```
+## Graph Directory Structure
+
+```bash
+python src/dir_to_graph_v3.py $OUTPUT_PATH --font-size 54
+d2 dataset_graph.d2 dataset_graph.png 
+```
 
 ## Zip result
 ```bash
@@ -93,3 +92,4 @@ cd $OUTPUT_PATH
 
 7z a -tzip -mmt=on kuopio-full-body-dataset.zip ./kuopio-full-body-dataset/
 ```
+

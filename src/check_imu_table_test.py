@@ -12,27 +12,16 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
+TEST_FILENAME = "table_test_orientations.sto"
 
 def read_sto_file(filepath: Path) -> pd.DataFrame:
-    with open(filepath, "r") as f:
-        lines = f.readlines()
-
-    # Find the last non-empty line (this contains column names)
-    header_idx = None
-
-    for i, line in enumerate(lines):
-        if line.strip() == "":  # blank line
-            # next non-empty line is header
-            for j in range(i + 1, len(lines)):
-                if lines[j].strip():
-                    header_idx = j
-                    break
-            break
-
-    if header_idx is None:
-        raise ValueError("Could not find header line with columns.")
-
-    df = pd.read_csv(filepath, sep="\t", skiprows=header_idx, header=0, index_col=0)
+    print("Starting on: ", filepath)
+    with open(filepath, "r") as file:
+        # Skip header
+        for line in file:
+            if line.strip() == "endheader":
+                break
+        df = pd.read_csv(file, sep="\t", header=0, index_col=0)
 
     return df
 
@@ -51,7 +40,7 @@ def collect_motion_files(
             continue
 
         for fname in os.listdir(dir):
-            if not fname.endswith("orientations.sto"):
+            if not fname == TEST_FILENAME:
                 continue
 
             motion = fname.rsplit("-", 1)[0]
