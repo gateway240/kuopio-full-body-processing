@@ -49,7 +49,15 @@ def group_key(f: Path):
 
 
 def emit(lines, a, b=None):
-    lines.append(a if b is None else f"{a} -> {b}")
+    if b is None:
+        lines.append(a)
+    else:
+        lines.append(f"{a} -> {b}")
+
+
+def emit_node(lines, node_id, label, font_size):
+    emit(lines, f'{node_id}: "{label}"')
+    # emit(lines, f"{node_id}.style.font-size: {font_size}")
 
 
 def node_id(*parts):
@@ -64,15 +72,16 @@ def stable_id(*parts):
     return hashlib.md5(key).hexdigest()[:10]
 
 
-def emit_raw_files(lines, parent_id, files, tag, root_name, session_name):
+def emit_raw_files(lines, parent_id, files, root_name, session_name, font_size):
     for f in sorted(files):
-        fid = node_id(root_name, session_name or "root", tag, f.name)
-        emit(lines, f'file_{fid}: "{FILE_ICON} {f.name}"')
-        emit(lines, parent_id, f"file_{fid}")
+        fid = node_id(root_name, session_name or "root", "file", f.name)
+        file_node = f"file_{fid}"
+        emit_node(lines, file_node, f"{FILE_ICON} {f.name}", font_size)
+        emit(lines, parent_id, file_node)
 
 
 def emit_grouped_files(
-    lines, parent_id, root_name, session_name, participants, modality
+    lines, parent_id, root_name, session_name, participants, modality, font_size
 ):
     groups = defaultdict(list)
 
@@ -87,8 +96,9 @@ def emit_grouped_files(
 
     for g in sorted(groups):
         gid = node_id(root_name, session_name, "participants", modality, g)
-        emit(lines, f'file_{gid}: "{FILE_ICON} {g}"')
-        emit(lines, parent_id, f"file_{gid}")
+        file_node = f"file_{gid}"
+        emit_node(lines, file_node, f"{FILE_ICON} {g}", font_size)
+        emit(lines, parent_id, file_node)
 
 
 def get_participant_range(session: Path):
@@ -100,43 +110,38 @@ def get_participant_range(session: Path):
         return None, []
 
     names = [p.name for p in participants]
-    label = f"[{names[0]}–{names[-1]}]" if len(names) > 1 else f"[{names[0]}]"
-
+    label = f"[{names[0]}–{names[-1]}]" if len(participants) > 1 else f"[{names[0]}]"
     return label, participants
 
 
-def build(root: Path, lines):
+def build(root: Path, lines, font_size):
     root_id = node_id(root.name)
-    emit(lines, f'{root_id}: "{FOLDER_ICON} {root.name}"')
+    emit_node(lines, root_id, f"{FOLDER_ICON} {root.name}", font_size)
 
-    # --- ROOT FILES (NEW) ---
     root_files = [f for f in root.iterdir() if f.is_file() and f.name not in IGNORED]
-    emit_raw_files(lines, root_id, root_files, "root_files", root.name, None)
+    emit_raw_files(lines, root_id, root_files, root.name, None, font_size)
 
-    # --- SESSIONS ---
     for session in safe_dirs(root):
         sid = node_id(root.name, session.name)
-        emit(lines, f'{sid}: "{FOLDER_ICON} {session.name}"')
+        emit_node(lines, sid, f"{FOLDER_ICON} {session.name}", font_size)
         emit(lines, root_id, sid)
 
-        # --- SESSION FILES (NEW) ---
-        session_files = [f for f in session.iterdir() if f.is_file() and f.name not in IGNORED]
-        emit_raw_files(lines, sid, session_files, "session_files", root.name, session.name)
+        session_files = [
+            f for f in session.iterdir() if f.is_file() and f.name not in IGNORED
+        ]
+        emit_raw_files(lines, sid, session_files, root.name, session.name, font_size)
 
-        # --- PARTICIPANT RANGE ---
         label, participants = get_participant_range(session)
         if not participants:
             continue
 
         pid = node_id(root.name, session.name, label)
-        emit(lines, f'{pid}: "{FOLDER_ICON} {label}"')
+        emit_node(lines, pid, f"{FOLDER_ICON} {label}", font_size)
         emit(lines, sid, pid)
 
-        # --- MODALITIES ---
         for modality in MODALITIES:
-
             mid = node_id(root.name, session.name, label, modality)
-            emit(lines, f'{mid}: "{FOLDER_ICON} {modality}"')
+            emit_node(lines, mid, f"{FOLDER_ICON} {modality}", font_size)
             emit(lines, pid, mid)
 
             emit_grouped_files(
@@ -145,15 +150,15 @@ def build(root: Path, lines):
                 root.name,
                 session.name,
                 participants,
-                modality
+                modality,
+                font_size,
             )
 
 
-def generate(root_dir, out):
+def generate(root_dir, lines, out, font_size):
     root = Path(root_dir).resolve()
-    lines = ["direction: right", ""]
 
-    build(root, lines)
+    build(root, lines, font_size)
 
     with open(out, "w") as f:
         f.write("\n".join(lines))
@@ -165,9 +170,21 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("directory")
     parser.add_argument("-o", "--output", default="dataset_graph.d2")
+    parser.add_argument("--font-size", type=int, default=18)
     args = parser.parse_args()
+    # See: https://d2lang.com/tour/globs/#changing-defaults
+    lines = [
+        "direction: right",
+        "",
+        "**: {",
+        f"style.font-size: {args.font_size}",
+        "}",
+        "(*** -> ***)[*]: {",
+        "style.stroke: black",
+        "}",
+    ]
 
-    generate(args.directory, args.output)
+    generate(args.directory, lines=lines, out=args.output, font_size=args.font_size)
 
 
 if __name__ == "__main__":

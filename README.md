@@ -26,8 +26,8 @@ python src/generate-readme.py --output_dir out --doc_fmt html
 ## Graph Directory Structure
 
 ```bash
-python src/dir_to_graph_v2.py $OUTPUT_PATH 
-d2 dataset.d2 dataset.png
+python src/dir_to_graph_v3.py $OUTPUT_PATH --font-size 60
+d2 dataset_graph.d2 dataset_graph.png 
 ```
 
 ## OpenSim

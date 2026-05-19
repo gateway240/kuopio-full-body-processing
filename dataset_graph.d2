@@ -1,10 +1,16 @@
 direction: right
 
+**: {
+style.font-size: 60
+}
+(*** -> ***)[*]: {
+style.stroke: black
+}
 kuopio_full_body_dataset: "📁 kuopio-full-body-dataset"
-file_kuopio_full_body_dataset__root__root_files__participant_record_csv: "📄 participant-record.csv"
-kuopio_full_body_dataset -> file_kuopio_full_body_dataset__root__root_files__participant_record_csv
-file_kuopio_full_body_dataset__root__root_files__readme_txt: "📄 readme.txt"
-kuopio_full_body_dataset -> file_kuopio_full_body_dataset__root__root_files__readme_txt
+file_kuopio_full_body_dataset__root__file__participant_record_csv: "📄 participant-record.csv"
+kuopio_full_body_dataset -> file_kuopio_full_body_dataset__root__file__participant_record_csv
+file_kuopio_full_body_dataset__root__file__readme_txt: "📄 readme.txt"
+kuopio_full_body_dataset -> file_kuopio_full_body_dataset__root__file__readme_txt
 kuopio_full_body_dataset__s01_raw: "📁 s01_raw"
 kuopio_full_body_dataset -> kuopio_full_body_dataset__s01_raw
 kuopio_full_body_dataset__s01_raw___01_13_: "📁 [01–13]"
@@ -73,7 +79,7 @@ file_kuopio_full_body_dataset__s03_aligned__participants__mocap__TRIAL_markers_t
 kuopio_full_body_dataset__s03_aligned___01_13___mocap -> file_kuopio_full_body_dataset__s03_aligned__participants__mocap__TRIAL_markers_trc
 kuopio_full_body_dataset__technical_validation: "📁 technical_validation"
 kuopio_full_body_dataset -> kuopio_full_body_dataset__technical_validation
-file_kuopio_full_body_dataset__technical_validation__session_files__imu_table_test_csv: "📄 imu-table-test.csv"
-kuopio_full_body_dataset__technical_validation -> file_kuopio_full_body_dataset__technical_validation__session_files__imu_table_test_csv
-file_kuopio_full_body_dataset__technical_validation__session_files__nan_check_csv: "📄 nan-check.csv"
-kuopio_full_body_dataset__technical_validation -> file_kuopio_full_body_dataset__technical_validation__session_files__nan_check_csv
+file_kuopio_full_body_dataset__technical_validation__file__imu_table_test_csv: "📄 imu-table-test.csv"
+kuopio_full_body_dataset__technical_validation -> file_kuopio_full_body_dataset__technical_validation__file__imu_table_test_csv
+file_kuopio_full_body_dataset__technical_validation__file__nan_check_csv: "📄 nan-check.csv"
+kuopio_full_body_dataset__technical_validation -> file_kuopio_full_body_dataset__technical_validation__file__nan_check_csv
