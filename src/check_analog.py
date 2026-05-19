@@ -14,9 +14,12 @@ from scipy.signal import butter, filtfilt, resample
 # max_workers: The maximum number of processes that can be used to
 #     execute the given calls. If None or not given then as many
 #     worker processes will be created as the machine has processors.
-MAX_WORKERS = 12
+MAX_WORKERS = None
 
 PLOT_RESULTS = False
+
+# Sampling rate known for system
+ANALOG_FS = 2400
 
 EMG_SENSORS = {
     # "trigger",
@@ -205,40 +208,29 @@ def butter_bandpass_filter(
     if len(data) < 2:
         raise ValueError("Not enough samples to compute sampling rate")
 
-    # ---- SAMPLING RATE FROM INDEX ----
-    dt = float(data.index[-1]) - float(data.index[0])
-    if dt <= 0:
-        raise ValueError(f"Invalid time range: dt={dt}")
-
-    sampling_rate = len(data) / dt
-    print(f"Sampling rate: {sampling_rate:.2f} Hz")
+    sampling_rate = ANALOG_FS
+    # print(f"Sampling rate: {sampling_rate:.2f} Hz")
 
     nyquist = sampling_rate / 2
 
     if highcut >= nyquist:
         raise ValueError(f"highcut ({highcut}) must be < Nyquist ({nyquist})")
 
-    # ---- NORMALIZED FREQUENCIES ----
     low = lowcut / nyquist
     high = highcut / nyquist
 
-    # ---- FILTER COEFFICIENTS ----
     b, a = butter(order, [low, high], btype="band")
 
-    # ---- SELECT COLUMNS ----
     exclude_cols = ["Frame#", "time", "Time"]
     cols_to_filter = [c for c in data.columns if c not in exclude_cols]
 
-    # ---- HANDLE MISSING VALUES ----
     data_interp = data.copy()
     data_interp[cols_to_filter] = data_interp[cols_to_filter].interpolate(
         method="linear", limit_direction="both"
     )
 
-    # ---- APPLY FILTER (vectorized) ----
     filtered_values = filtfilt(b, a, data_interp[cols_to_filter].values, axis=0)
 
-    # ---- RETURN ----
     filtered_df = data.copy()
     filtered_df[cols_to_filter] = filtered_values
 
@@ -328,9 +320,9 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
 
 
 def _process_single_trial(args):
-    participant, trial_name, info, output_dir = args
-    snr_dict = {}
-    missing = {}
+    participant, trial_name, info = args
+
+    result = {}
     try:
         analog = _read_file_without_header(Path(info["analog"]))
 
@@ -343,8 +335,32 @@ def _process_single_trial(args):
         emg_df = analog[[col for col in EMG_SENSORS if col in analog.columns]]
         # ---- APPLY BANDPASS FILTER ----
         # https://wiki.has-motion.com/doku.php?id=visual3d:tutorials:emg:typical_emg_processing
-        emg_df = butter_bandpass_filter(emg_df, lowcut=50, highcut=500, order=4)
+        emg_df_filtered = butter_bandpass_filter(
+            emg_df, lowcut=50, highcut=500, order=4
+        )
+        result = {
+            "participant": participant,
+            "trial_name": trial_name,
+            "raw_analog": emg_df,
+            "filtered_analog": emg_df_filtered,
+            "missing": missing
+        }
 
+    except Exception as e:
+        print("ERROR: ", info, e)
+
+    return result
+
+
+def _calculate_single_trial(args):
+    info, output_dir = args
+    snr_dict = {}
+
+    participant = info["participant"]
+    trial_name = info["trial_name"]
+    emg_df = info["filtered_analog"]
+    missing = info["missing"]
+    try:
         # ---- COMPUTE SNR ----
         best_windows = {}
 
@@ -369,10 +385,8 @@ def _process_single_trial(args):
     result = {
         "participant": participant,
         "trial": trial_name,
-        # "error_mean": float(np.mean(error)),
-        # "error_std": float(np.std(error)),
-        "missing": missing,
         **snr_dict,
+        "missing": missing,
     }
 
     return result
@@ -385,18 +399,19 @@ def process_motion_files(
     motions: Dict,
     output_dir: Path,
 ):
-    results = []
-
-    tasks = [
-        (participant, trial, info, output_dir)
-        for (participant, trial), info in motions.items()
+    tasks_stage1 = [
+        (participant, trial, info) for (participant, trial), info in motions.items()
     ]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        futures = [executor.submit(_process_single_trial, t) for t in tasks]
-
-        for future in as_completed(futures):
-            results.append(future.result())
+        try:
+            results_stage1 = list(executor.map(_process_single_trial, tasks_stage1))
+            tasks_stage2 = [(info, output_dir) for info in results_stage1]
+            results = list(executor.map(_calculate_single_trial, tasks_stage2))
+        except KeyboardInterrupt:
+            print("Interrupted")
+            executor.shutdown(cancel_futures=True)
+            raise
 
     return pd.DataFrame(results)
 
@@ -427,9 +442,14 @@ def main() -> None:
     print(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
     summary_df = process_motion_files(motions, output_dir)
-    # summary_df = summary_df.drop("file", axis=1)
-    # summary_df = summary_df.drop("df", axis=1)
     summary_df = summary_df.sort_values(["participant", "trial"])
+    # Filter out empty sets so it doesn't print set() in the csv
+    summary_df = summary_df.map(
+        lambda x: "" if isinstance(x, set) and len(x) == 0 else x
+    )
+    # fill NaN only in numeric columns
+    numeric_cols = summary_df.select_dtypes(include="number").columns
+    summary_df[numeric_cols] = summary_df[numeric_cols].fillna(0)
     print(summary_df)
     output_file = output_dir / "emg-snr.csv"
     summary_df.to_csv(output_file, index=False)
