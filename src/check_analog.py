@@ -146,25 +146,6 @@ def filter_motion_trials(trials: dict, known_trials: set):
     return filtered
 
 
-def is_versioned_trial(filename: str, suffix: str) -> bool:
-    """
-    Detects files like:
-        dyn_score_hip-1_accelerations.sto -> True
-        dyn_score_hip_accelerations.sto   -> False
-    """
-
-    # remove suffix first
-    base = filename.replace(suffix, "")
-
-    # check for "-number" at the end
-    if "-" not in base:
-        return False
-
-    last_part = base.split("-")[-1]
-
-    return last_part.isdigit()
-
-
 def collect_motion_files(root_dir: str):
     trials = {}
 
@@ -235,19 +216,6 @@ def butter_bandpass_filter(
     filtered_df[cols_to_filter] = filtered_values
 
     return filtered_df
-
-
-def downsample(df: pd.DataFrame, target_fs: float, current_fs: float):
-    df = df.copy()
-    # print(df.index)
-    target_dt = pd.to_timedelta(1 / target_fs, unit="s")
-    return df.resample(rule=pd.to_timedelta(target_dt)).mean()
-
-
-def downsample_np(x: np.ndarray, target_fs: float, current_fs: float):
-    n_samples = int(len(x) * target_fs / current_fs)
-    return resample(x, n_samples)
-
 
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING

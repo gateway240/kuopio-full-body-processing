@@ -80,7 +80,7 @@ python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH
 ## Graph Directory Structure
 
 ```bash
-python src/dir_to_graph_v3.py $OUTPUT_PATH --font-size 54
+python src/dir_to_graph.py $OUTPUT_PATH --font-size 54
 d2 dataset_graph.d2 dataset_graph.png 
 ```
 
