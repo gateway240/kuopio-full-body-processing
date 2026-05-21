@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pathlib
 
 import argparse
 import os
@@ -147,7 +148,7 @@ def _process_single_file(args):
         "trial": motion,
         "file": f,
         "df": df,
-        **summary_dict
+        **summary_dict,
     }
 
 
@@ -217,9 +218,8 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 def process_motion_files(
     motions: Dict[Tuple[str, str], List[str]], output_dir: Path
 ) -> pd.DataFrame:
-
     tasks_stage1 = [
-        (participant, trial, f, output_dir) 
+        (participant, trial, f, output_dir)
         for (participant, trial), files in motions.items()
         for f in files
     ]
@@ -236,6 +236,13 @@ def process_motion_files(
     if PLOT_RESULTS:
         aggregate_and_plot(summary_df, output_dir)
     return summary_df
+
+
+def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
+    mean_row = df_subset.mean().round(2)
+    sd_row = df_subset.std().round(2)
+    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")
+    return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
 
 
 def main() -> None:
@@ -261,8 +268,69 @@ def main() -> None:
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
-    output_file = output_dir / "imu-table-test.csv"
+    output_file = output_dir / "imu-table-test-per-sensors.csv"
     summary_df.to_csv(output_file, index=False)
+
+    # Calculate across all sensors
+    roll_cols = [c for c in summary_df.columns if "_roll_mean" in c]
+    pitch_cols = [c for c in summary_df.columns if "_pitch_mean" in c]
+    yaw_cols = [c for c in summary_df.columns if "_yaw_mean" in c]
+    summary_stats = pd.DataFrame(
+        {
+            "participant": summary_df["participant"],
+            "roll_mean": summary_df[roll_cols].mean(axis=1),
+            "roll_std": summary_df[roll_cols].std(axis=1),
+            "roll_delta": summary_df[roll_cols].max(axis=1)
+            - summary_df[roll_cols].min(axis=1),
+            "pitch_mean": summary_df[pitch_cols].mean(axis=1),
+            "pitch_std": summary_df[pitch_cols].std(axis=1),
+            "pitch_delta": summary_df[pitch_cols].max(axis=1)
+            - summary_df[pitch_cols].min(axis=1),
+            "yaw_mean": summary_df[yaw_cols].mean(axis=1),
+            "yaw_std": summary_df[yaw_cols].std(axis=1),
+            "yaw_delta": summary_df[yaw_cols].max(axis=1)
+            - summary_df[yaw_cols].min(axis=1),
+        }
+    )
+
+    print(summary_stats)
+
+    output_file = output_dir / "imu-table-test-per-participant.csv"
+    summary_stats.to_csv(output_file, index=False)
+
+    rename_map = {
+        "participant": "\#",
+        "roll_mean": r"X $\mu$",
+        "roll_std": r"X $\sigma$",
+        "roll_delta": r"X $\Delta$",
+        "pitch_mean": r"Y $\mu$",
+        "pitch_std": r"Y $\sigma$",
+        "pitch_delta": r"Y $\Delta$",
+        "yaw_mean": r"Z $\mu$",
+        "yaw_std": r"Z $\sigma$",
+        "yaw_delta": r"Z $\Delta$",
+    }
+
+    summary_stats = summary_stats.rename(columns=rename_map)
+
+    latex = summary_stats.to_latex(
+        index=False,
+        caption=(
+            "IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+            "All values are presented in degrees (°). "
+            "X,Y, and Z represent roll, pitch, and yaw respectively. "
+            "Sensors were placed on a flat, non-metallic table with the same orientation "
+            "after being removed from the participant at the end of each data collection session."
+        ),
+        label="tab:imu_table_test_per_participant",
+        escape=False,
+        float_format="%.2f",
+    )
+
+    print(latex)
+    output_file_latex = pathlib.Path("out") / "imu-table-test-per-participant.txt"
+    with open(output_file_latex, "w", newline="") as file:
+        file.write(latex)
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 
