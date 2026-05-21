@@ -71,6 +71,7 @@ python src/check_imu_table_test.py $OUTPUT_PATH/s02_extracted --output_dir $OUTP
 python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/technical_validation
 python src/check_imu_marker_correlation.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
 python src/check_analog.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+python src/check_analog_summary.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
 ```
 
 Debugging

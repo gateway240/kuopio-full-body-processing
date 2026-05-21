@@ -231,7 +231,7 @@ def _process_single_trial(args):
         "nan_count": total_nan_count,
         "nan_percent": nan_ratio * 100,
         "missing_count": missing_count,
-        "missing_markers": missing_markers,
+        "missing": missing_markers,
     }
 
 

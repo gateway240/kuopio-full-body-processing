@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import argparse
 import os
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt, resample
+from scipy.signal import butter, filtfilt
 
 # max_workers: The maximum number of processes that can be used to
 #     execute the given calls. If None or not given then as many
@@ -20,6 +20,8 @@ PLOT_RESULTS = False
 
 # Sampling rate known for system
 ANALOG_FS = 2400
+
+WINDOW_SIZE = ANALOG_FS
 
 EMG_SENSORS = {
     # "trigger",
@@ -222,7 +224,7 @@ def butter_bandpass_filter(
 # ---------------------------
 
 
-def compute_snr(signal, baseline_len=5000, window_size=1000, step=200):
+def compute_snr(signal, baseline_len, window_size, step=200):
     signal = np.asarray(signal)
 
     if len(signal) < baseline_len:
@@ -332,8 +334,8 @@ def _calculate_single_trial(args):
         # ---- COMPUTE SNR ----
         best_windows = {}
 
-        baseline_size = 2500
-        window_size = 2500
+        baseline_size = WINDOW_SIZE
+        window_size = WINDOW_SIZE
         for col in emg_df.columns:
             snr, best_start = compute_snr(
                 emg_df[col].values, baseline_size, window_size
@@ -420,7 +422,10 @@ def main() -> None:
     summary_df[numeric_cols] = summary_df[numeric_cols].fillna(0)
     print(summary_df)
     output_file = output_dir / "emg-snr.csv"
-    summary_df.to_csv(output_file, index=False)
+    col = summary_df.columns[0]
+    summary_df.assign(
+        **{col: summary_df[col].map(lambda x: f"{int(x):02d}")}
+    ).to_csv(output_file, index=False)
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

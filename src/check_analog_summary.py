@@ -1,0 +1,149 @@
+from __future__ import annotations
+from pandas.core.config_init import float_format_doc
+import pathlib
+
+import argparse
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+# max_workers: The maximum number of processes that can be used to
+#     execute the given calls. If None or not given then as many
+#     worker processes will be created as the machine has processors.
+MAX_WORKERS = None
+
+PLOT_RESULTS = False
+
+SNR_THRESHOLD = 3.0
+
+EMG_SENSORS = {
+    # "trigger",
+    "LD_Right",
+    "ST_Left",
+    "LD_Left",
+    "VM_Left",
+    "RF_Left",
+    "VL_Right",
+    "VM_Right",
+    "BF_Left",
+    "VL_Left",
+    "RF_Right",
+    "ST_Right",
+    "BF_Right",
+    "GM_Right",
+    "GM_Left",
+    "TT_Left",
+    "DM_Left",
+    "TA_Left",
+    "TD_Left",
+    "TT_Right",
+    "DM_Right",
+    "TA_Right",
+    "TD_Right",
+}
+
+
+def main() -> None:
+    # This makes a non-interactive backend to prevent memory leak
+    # see https://github.com/matplotlib/matplotlib/issues/20300
+    plt.switch_backend("agg")
+    parser = argparse.ArgumentParser(description="Check files")
+    parser.add_argument(
+        "source_dir",
+        type=str,
+        help="Root directory containing subject folders",
+    )
+    parser.add_argument(
+        "--output_dir",
+        default="out",
+        help="Directory to save output CSV (default: current directory)",
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="If set, do not write any output files."
+    )
+
+    args = parser.parse_args()
+    output_dir = Path(args.output_dir)
+    Path.mkdir(output_dir, parents=True, exist_ok=True)
+
+    input_file = output_dir / "emg-snr.csv"
+    summary_df = pd.read_csv(input_file)
+    exclude_cols = ["participant", "trial", "missing"]
+    snr_cols = [c for c in summary_df.columns if c not in exclude_cols]
+
+    # Filter out SNRs below threshold
+    summary_df[snr_cols] = summary_df[snr_cols].applymap(
+        lambda x: x if x >= SNR_THRESHOLD else pd.NA
+    )
+
+    # Define a function to calculate stats per participant
+    def calculate_participant_stats(group):
+        # Flatten all SNR columns into a 1D array and remove NaNs
+        values = group[snr_cols].values.flatten()
+        values = values[~pd.isna(values)]
+
+        # Compute mean, std, and range
+        snr_mean = values.mean() if len(values) > 0 else pd.NA
+        snr_std = values.std(ddof=1) if len(values) > 1 else pd.NA
+        snr_range = values.max() - values.min() if len(values) > 0 else pd.NA
+
+        return pd.Series(
+            {"snr_mean": snr_mean, "snr_std": snr_std, "snr_range": snr_range}
+        )
+
+    # Apply the function per participant
+    summary_stats = (
+        summary_df.groupby("participant")
+        .apply(calculate_participant_stats)
+        .reset_index()
+    )
+
+    print(summary_stats)
+
+    output_file = output_dir / "emg-snr-per-participant.csv"
+    col = summary_stats.columns[0]
+    summary_stats.assign(
+        **{col: summary_stats[col].map(lambda x: f"{x:02d}")}
+    ).to_csv(output_file, index=False)
+
+    rename_map = {
+        "participant": "\#",
+        "snr_mean": r"SNR $\mu$",
+        "snr_std": r"SNR $\sigma$",
+        "snr_range": r"SNR $\Delta$",
+    }
+
+    summary_stats = summary_stats.rename(columns=rename_map)
+
+    fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
+    fmt.update({col: "{:.2f}" for col in summary_stats.columns[1:]})  # rest as floats
+
+    latex = (
+        summary_stats.style.format(fmt)
+        .hide(axis="index")
+        .to_latex(
+            caption=(
+                "EMG signal-to-noise (SNR) ratio (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                "All values are presented in decibels (dB). "
+                "This presents a summary of all trials available for a participant. "
+                "For more granular per-trial metrics, see the provided ``emg-snr.csv'' file. "
+                "The first second of the trial represents the noise baseline and the "
+                "one second window in the trial with the largest amplitude represents the signal value. "
+            ),
+            label="tab:emg_snr_per_participant",
+            position_float="centering",
+            hrules=True,  # adds \toprule, \midrule, \bottomrule
+        )
+    )
+
+    print(latex)
+    output_file_latex = pathlib.Path("out") / "emg-snr-per-participant.txt"
+    with open(output_file_latex, "w", newline="") as file:
+        file.write(latex)
+
+    print(f"\nDone. Processed: {len(summary_df)} trials!")
+
+
+if __name__ == "__main__":
+    main()
