@@ -268,7 +268,7 @@ def main() -> None:
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
-    output_file = output_dir / "imu-table-test-per-sensors.csv"
+    output_file = output_dir / "imu-table-test-per-sensor.csv"
     summary_df.to_csv(output_file, index=False)
 
     # Calculate across all sensors
