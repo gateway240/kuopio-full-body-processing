@@ -268,7 +268,8 @@ def main() -> None:
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
-    output_file = output_dir / "imu-table-test-per-sensor.csv"
+    
+    output_file = output_dir/ "imu-table-test.csv"
     summary_df.to_csv(output_file, index=False)
 
     # Calculate across all sensors
@@ -295,7 +296,8 @@ def main() -> None:
 
     print(summary_stats)
 
-    output_file = output_dir / "imu-table-test-per-participant.csv"
+    output_dir_latex = pathlib.Path("out")
+    output_file = output_dir_latex / "imu-table-test-per-participant.csv"
     summary_stats.to_csv(output_file, index=False)
 
     rename_map = {
@@ -328,7 +330,7 @@ def main() -> None:
     )
 
     print(latex)
-    output_file_latex = pathlib.Path("out") / "imu-table-test-per-participant.txt"
+    output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
     with open(output_file_latex, "w", newline="") as file:
         file.write(latex)
 
