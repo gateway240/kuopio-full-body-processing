@@ -182,9 +182,14 @@ def main() -> None:
     summary_df = process_motion_files(motions, output_dir, args.dry_run)
     summary_df = summary_df.drop("file", axis=1)
     summary_df = summary_df.drop("df", axis=1)
-    summary_df = summary_df.sort_values(["participant", "trial"])
     summary_df = summary_df.map(
         lambda x: "" if isinstance(x, list) and len(x) == 0 else x
+    )
+    summary_df = (
+        summary_df
+        .sort_values(["participant", "trial"])
+        .groupby(["participant", "trial"], as_index=False)
+        .first()
     )
     print(summary_df)
     output_file = output_dir / "imu-continuity.csv"
