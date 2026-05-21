@@ -110,18 +110,44 @@ def _process_single_file(args):
 
     path = Path(f)
     df = read_sto_file(path)
-    print(df)
+    # print(df)
 
-    output_file = output_dir / f"{participant}.png"
+    df_euler = pd.concat(
+        [
+            pd.DataFrame(
+                quaternion_series_to_euler(df[col]),
+                columns=[
+                    f"{col}_roll",
+                    f"{col}_pitch",
+                    f"{col}_yaw",
+                ],
+                index=df[col].dropna().index,
+            )
+            for col in df.columns
+        ],
+        axis=1,
+    )
+    print(df_euler)
+    means, stds = df_euler.mean().to_numpy(), df_euler.std().to_numpy()
+
+    # interleave
+    summary = pd.DataFrame(
+        np.column_stack([means, stds]).reshape(1, -1),
+        columns=[f"{c}_{stat}" for c in df_euler.columns for stat in ["mean", "std"]],
+    )
+    print(summary)
+    summary_dict = summary.iloc[0].to_dict()
 
     if PLOT_RESULTS:
+        output_file = output_dir / f"{participant}.png"
         plot_euler(df, output_file)
 
     return {
         "participant": participant,
-        "motion": motion,
+        "trial": motion,
         "file": f,
         "df": df,
+        **summary_dict
     }
 
 
@@ -189,23 +215,24 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
+    motions: Dict[Tuple[str, str], List[str]], output_dir: Path
 ) -> pd.DataFrame:
-    summary_rows = []
 
-    tasks = []
-    for (participant, motion), files in motions.items():
-        print("Starting: ", participant, motion)
-        for f in files:
-            tasks.append((participant, motion, f, output_dir))
+    tasks_stage1 = [
+        (participant, trial, f, output_dir) 
+        for (participant, trial), files in motions.items()
+        for f in files
+    ]
 
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(_process_single_file, t) for t in tasks]
+        try:
+            results = list(executor.map(_process_single_file, tasks_stage1))
+        except KeyboardInterrupt:
+            print("Interrupted")
+            executor.shutdown(cancel_futures=True)
+            raise
 
-        for future in as_completed(futures):
-            summary_rows.append(future.result())
-
-    summary_df = pd.DataFrame(summary_rows)
+    summary_df = pd.DataFrame(results)
     if PLOT_RESULTS:
         aggregate_and_plot(summary_df, output_dir)
     return summary_df
@@ -223,9 +250,6 @@ def main() -> None:
         default="out",
         help="Directory to save output CSV (default: current directory)",
     )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
-    )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
@@ -233,8 +257,8 @@ def main() -> None:
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
-    summary_df = process_motion_files(motions, output_dir, args.dry_run)
-    summary_df = summary_df.drop("file", axis=1)
+    summary_df = process_motion_files(motions, output_dir)
+    summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
     output_file = output_dir / "imu-table-test.csv"

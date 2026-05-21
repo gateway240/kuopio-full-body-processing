@@ -8,7 +8,7 @@ in OpenSim.
 Setting the export path and configuring the env (`python -m venv .venv` or `uv venv`):
 
 ```py
-export OUTPUT_PATH=~/data/kuopio-full-body-dataset
+export OUTPUT_PATH=~/data/kuopio-full-body-dataset-results
 export OUTPUT_PATH=out/kuopio-full-body-dataset
 source .venv/bin/activate
 uv pip install -e .[dev]

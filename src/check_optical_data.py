@@ -224,7 +224,7 @@ def _process_single_trial(args):
 
     return {
         "participant": participant,
-        "motion": trial,
+        "trial": trial,
         "file": trc,
         "total_elements": total_elements,
         "star_columns": star_columns_count,
@@ -283,7 +283,7 @@ def main() -> None:
     print(motions)
     summary_df = process_motion_files(motions, args.dry_run)
     summary_df = summary_df.drop(["file", "star_columns"], axis=1)
-    summary_df = summary_df.sort_values(["participant", "motion"])
+    summary_df = summary_df.sort_values(["participant", "trial"])
     print(summary_df)
     # Filter out empty sets so it doesn't print set() in the csv
     summary_df = summary_df.map(

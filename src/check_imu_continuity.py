@@ -93,10 +93,11 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
     overflow_events = diff[(diff == -MAX_PACKET)]
 
     if not overflow_events.empty:
-        overflow_list = [
-            (packet.iloc[i - 1], packet.iloc[i]) for i in overflow_events.index
-        ]
-        errors.append(f"PacketCounter overflow detected: {overflow_list}")
+        # overflow_list = [
+        #     (packet.iloc[i - 1], packet.iloc[i]) for i in overflow_events.index
+        # ]
+        # errors.append(f"PacketCounter overflow detected: {overflow_list}")
+        errors.append("PacketCounter Overflow")
 
     # --- 2. Check all numeric columns ---
     numeric_df = df.drop(columns=["PacketCounter"], errors="ignore")
@@ -128,10 +129,10 @@ def _process_single_file(args):
 
     return {
         "participant": participant,
-        "motion": motion,
+        "trial": motion,
         "file": f,
         "df": df,
-        "errors": errors,
+        "notes": errors,
     }
 
 
@@ -181,7 +182,10 @@ def main() -> None:
     summary_df = process_motion_files(motions, output_dir, args.dry_run)
     summary_df = summary_df.drop("file", axis=1)
     summary_df = summary_df.drop("df", axis=1)
-    summary_df = summary_df.sort_values(["participant", "motion"])
+    summary_df = summary_df.sort_values(["participant", "trial"])
+    summary_df = summary_df.map(
+        lambda x: "" if isinstance(x, list) and len(x) == 0 else x
+    )
     print(summary_df)
     output_file = output_dir / "imu-continuity.csv"
     summary_df.to_csv(output_file, index=False)
