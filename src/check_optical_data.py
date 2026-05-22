@@ -292,17 +292,58 @@ def main() -> None:
     output_file = output_dir / "optical-continuity.csv"
     summary_df.to_csv(output_file, index=False)
 
-    participant_summary = summary_df.groupby("participant", as_index=False).agg(
-        {
-            "total_elements": "sum",
-            "nan_count": "sum",
-        }
+    summary_stats = (
+        summary_df.groupby("participant", as_index=False)
+        .agg(
+            mean_nan_percent=("nan_percent", "mean"),
+            std_nan_percent=("nan_percent", "std"),
+            range_nan_percent=(
+                "nan_percent",
+                lambda x: x.max() - x.min(),
+            ),
+        )
+    )
+    
+    output_dir_latex = Path("out")
+    output_file = output_dir_latex / "optical-continuity-per-participant.csv"
+    col = summary_stats.columns[0]
+    summary_stats.assign(
+        **{col: summary_stats[col].map(lambda x: f"{int(x):02d}")}
+    ).to_csv(output_file, index=False)
+
+    rename_map = {
+        "participant": "\#",
+        "mean_nan_percent": r"$\mu$",
+        "std_nan_percent": r"$\sigma$",
+        "range_nan_percent": r"$\Delta$",
+    }
+
+    summary_stats = (
+        summary_stats[list(rename_map.keys())]
+        .rename(columns=rename_map)
     )
 
-    participant_summary["nan_percent"] = (
-        participant_summary["nan_count"] / participant_summary["total_elements"] * 100
+    fmt = {col: "{:.2f}" for col in summary_stats.columns[1:]}  # rest as floats
+
+    latex = (
+        summary_stats.style.format(fmt)
+        .hide(axis="index")
+        .to_latex(
+            caption=(
+                "Optical continuity  (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                "The values represent the percentage (\%) of optical data points "
+                "in all trials for a given participant which contained NaN values."
+            ),
+            label="tab:optical_continuity_per_participant",
+            position_float="centering",
+            hrules=True,  # adds \toprule, \midrule, \bottomrule
+        )
     )
-    print(participant_summary.to_string(index=False))
+
+    print(latex)
+    output_file_latex = output_dir_latex / "optical-continuity-per-participant.txt"
+    with open(output_file_latex, "w", newline="") as file:
+        file.write(latex)
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

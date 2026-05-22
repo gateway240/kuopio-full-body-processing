@@ -1,17 +1,11 @@
 from __future__ import annotations
-from pandas.core.config_init import float_format_doc
-import pathlib
 
 import argparse
+import pathlib
 from pathlib import Path
 
 import matplotlib.pyplot as plt
 import pandas as pd
-
-# max_workers: The maximum number of processes that can be used to
-#     execute the given calls. If None or not given then as many
-#     worker processes will be created as the machine has processors.
-MAX_WORKERS = None
 
 PLOT_RESULTS = False
 
