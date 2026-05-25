@@ -11,7 +11,7 @@ PLOT_RESULTS = False
 
 SNR_THRESHOLD = 3.0
 
-PAIRS_TO_SELECT = 10
+PAIRS_TO_SELECT = 8
 
 EMG_SENSORS = {
     # "trigger",
