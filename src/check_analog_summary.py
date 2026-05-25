@@ -80,7 +80,7 @@ def main() -> None:
         # Compute mean, std, and range
         snr_mean = values.mean() if len(values) > 0 else pd.NA
         snr_std = values.std(ddof=1) if len(values) > 1 else pd.NA
-        snr_range = values.max() - values.min() if len(values) > 0 else pd.NA
+        snr_range = f"{values.min():.1f} – {values.max():.1f}"
 
         return pd.Series(
             {"snr_mean": snr_mean, "snr_std": snr_std, "snr_range": snr_range}
@@ -112,8 +112,12 @@ def main() -> None:
     summary_stats = summary_stats.rename(columns=rename_map)
 
     fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
-    fmt.update({col: "{:.2f}" for col in summary_stats.columns[1:]})  # rest as floats
-
+    fmt.update({
+        col: "{:.2f}"
+        for col in summary_stats.columns[1:]
+        if pd.api.types.is_numeric_dtype(summary_stats[col])
+    })
+    
     latex = (
         summary_stats.style.format(fmt)
         .hide(axis="index")

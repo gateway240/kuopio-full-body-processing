@@ -11,7 +11,7 @@ PLOT_RESULTS = False
 
 SNR_THRESHOLD = 3.0
 
-PAIRS_TO_SELECT = 8
+PAIRS_TO_SELECT = 10
 
 EMG_SENSORS = {
     # "trigger",
@@ -63,7 +63,7 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     Path.mkdir(output_dir, parents=True, exist_ok=True)
 
-    input_file = output_dir / "imu-marker-correlation.csv"
+    input_file = output_dir / "imu-marker-sync.csv"
     summary_df = pd.read_csv(input_file)
     top_corr = (
         summary_df
@@ -79,10 +79,10 @@ def main() -> None:
         .agg(
             corr_mean=("best_corr", "mean"),
             corr_std=("best_corr", "std"),
-            corr_range=("best_corr", lambda x: x.max() - x.min()),
+            corr_range=("best_corr", lambda x: f"{x.min():.2f} – {x.max():.2f}"),
             lag_mean=("best_lag", "mean"),
             lag_std=("best_lag", "std"),
-            lag_range=("best_lag", lambda x: x.max() - x.min()),
+            lag_range=("best_lag", lambda x: f"{x.min():.0f} – {x.max():.0f}"),
         )
         .reset_index()
     )
@@ -107,7 +107,11 @@ def main() -> None:
     summary_stats = summary_stats.rename(columns=rename_map)
 
     fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
-    fmt.update({col: "{:.2f}" for col in summary_stats.columns[1:]})  # rest as floats
+    fmt.update({
+        col: "{:.2f}"
+        for col in summary_stats.columns[1:]
+        if pd.api.types.is_numeric_dtype(summary_stats[col])
+    })
 
     latex = (
         summary_stats.style.format(fmt)

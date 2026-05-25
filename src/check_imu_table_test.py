@@ -268,8 +268,8 @@ def main() -> None:
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
-    
-    output_file = output_dir/ "imu-table-test.csv"
+
+    output_file = output_dir / "imu-table-test.csv"
     summary_df.to_csv(output_file, index=False)
 
     # Calculate across all sensors
@@ -281,19 +281,23 @@ def main() -> None:
             "participant": summary_df["participant"],
             "roll_mean": summary_df[roll_cols].mean(axis=1),
             "roll_std": summary_df[roll_cols].std(axis=1),
-            "roll_delta": summary_df[roll_cols].max(axis=1)
-            - summary_df[roll_cols].min(axis=1),
+            "roll_delta": summary_df[roll_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
             "pitch_mean": summary_df[pitch_cols].mean(axis=1),
             "pitch_std": summary_df[pitch_cols].std(axis=1),
-            "pitch_delta": summary_df[pitch_cols].max(axis=1)
-            - summary_df[pitch_cols].min(axis=1),
+            "pitch_delta": summary_df[pitch_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
             "yaw_mean": summary_df[yaw_cols].mean(axis=1),
             "yaw_std": summary_df[yaw_cols].std(axis=1),
-            "yaw_delta": summary_df[yaw_cols].max(axis=1)
-            - summary_df[yaw_cols].min(axis=1),
+            "yaw_delta": summary_df[yaw_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
+            # "yaw_delta":  summary_df[yaw_cols].max(axis=1)
+            # - summary_df[yaw_cols].min(axis=1),
         }
     )
-
     print(summary_stats)
 
     output_dir_latex = pathlib.Path("out")

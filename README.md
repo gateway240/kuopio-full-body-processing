@@ -89,8 +89,10 @@ d2 dataset_graph.d2 dataset_graph.png
 ## Zip result
 ```bash
 cd $OUTPUT_PATH
-7z a -tzip -mmt=on kfb-s02_extracted.zip ./s02_extracted
-7z a -tzip -mmt=on kfb-s03_aligned.zip ./s03_aligned
+7z a -tzip -mmt=on s01_raw.zip ./s01_raw
+7z a -tzip -mmt=on s02_extracted.zip ./s02_extracted
+7z a -tzip -mmt=on s03_aligned.zip ./s03_aligned
+7z a -tzip -mmt=on technical_validation.zip ./technical_validation
 
 7z a -tzip -mmt=on kuopio-full-body-dataset.zip ./kuopio-full-body-dataset/
 ```

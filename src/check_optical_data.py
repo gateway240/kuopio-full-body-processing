@@ -292,18 +292,16 @@ def main() -> None:
     output_file = output_dir / "optical-continuity.csv"
     summary_df.to_csv(output_file, index=False)
 
-    summary_stats = (
-        summary_df.groupby("participant", as_index=False)
-        .agg(
-            mean_nan_percent=("nan_percent", "mean"),
-            std_nan_percent=("nan_percent", "std"),
-            range_nan_percent=(
-                "nan_percent",
-                lambda x: x.max() - x.min(),
-            ),
-        )
+    summary_stats = summary_df.groupby("participant", as_index=False).agg(
+        mean_nan_percent=("nan_percent", "mean"),
+        std_nan_percent=("nan_percent", "std"),
+        range_nan_percent=("nan_percent", lambda x: f"{x.min():.1f} – {x.max():.1f}"),
+        # range_nan_percent=(
+        #     "nan_percent",
+        #     lambda x: x.max() - x.min(),
+        # ),
     )
-    
+
     output_dir_latex = Path("out")
     output_file = output_dir_latex / "optical-continuity-per-participant.csv"
     col = summary_stats.columns[0]
@@ -318,12 +316,13 @@ def main() -> None:
         "range_nan_percent": r"$\Delta$",
     }
 
-    summary_stats = (
-        summary_stats[list(rename_map.keys())]
-        .rename(columns=rename_map)
-    )
+    summary_stats = summary_stats[list(rename_map.keys())].rename(columns=rename_map)
 
-    fmt = {col: "{:.2f}" for col in summary_stats.columns[1:]}  # rest as floats
+    fmt = {
+        col: "{:.2f}"
+        for col in summary_stats.columns[1:]
+        if pd.api.types.is_numeric_dtype(summary_stats[col])
+    }
 
     latex = (
         summary_stats.style.format(fmt)
