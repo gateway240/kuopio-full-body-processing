@@ -82,8 +82,8 @@ python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH
 ## Graph Directory Structure
 
 ```bash
-python src/dir_to_graph.py $OUTPUT_PATH --font-size 54
-d2 dataset_graph.d2 dataset_graph.png 
+python src/dir_to_graph.py $OUTPUT_PATH -o images/dataset_graph.d2 --font-size 54
+d2 images/dataset_graph.d2 images/dataset_graph.png 
 ```
 
 ## Zip result
