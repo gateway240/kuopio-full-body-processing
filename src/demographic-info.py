@@ -31,14 +31,11 @@ output_demographic = os.path.join(output_dir, output_demographic_file)
 output_dimensions = os.path.join(output_dir, output_dimensions_file)
 
 
-# Load the data
 df = pd.read_csv(input_file)
 
-# --- Keep only numeric columns and drop 'id' if present ---
 numeric_df = df.select_dtypes(include=[np.number]).drop(columns=["id"], errors="ignore")
 
 
-# --- Helper function to make summary DataFrame ---
 def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
@@ -71,7 +68,7 @@ print(latex_demographics)
 with open(output_demographic, "w", newline="") as csvfile:
     csvfile.write(latex_demographics)
 
-# --- Table 2: Custom subset (edit this list to your liking) ---
+
 cols_custom = [
     "body_mass",
     "height",
@@ -105,7 +102,7 @@ cols_custom = [
     # "jogging_speed",
     # "crab_walking_speed"
 ]
-# --- Rename columns with abbreviations ---
+
 rename_map = {
     "body_mass": "Mass [kg]",
     "height": "Height [cm]",
@@ -140,12 +137,10 @@ rename_map = {
 subset_df = numeric_df[cols_custom].rename(columns=rename_map)
 summary_custom = summary_table(subset_df, index_list)
 
-# --- Transpose table (flip rows and columns) ---
 summary_transposed = summary_custom.T
 summary_transposed = summary_transposed.reset_index()
 summary_transposed = summary_transposed.rename(columns={"index": "Measurement"})
 
-# --- Export to LaTeX (no centering, no wrapper) ---
 latex_dimensions = summary_transposed.to_latex(
     index=False,
     caption=(
@@ -160,6 +155,5 @@ latex_dimensions = summary_transposed.to_latex(
 
 print(latex_dimensions)
 
-# --- Save to file ---
 with open(output_dimensions, "w", newline="") as csvfile:
     csvfile.write(latex_dimensions)

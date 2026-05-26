@@ -215,7 +215,8 @@ The Xsens MT Manager 2022.2 (Movella Inc, Henderson, NV, USA) wireless IMU syste
 """
 imu_list = [
     "13 MTw Awinda wireless IMU sensors at 60 Hz on the participant",
-    "1 sensor on the bottom of the punching during the boxing trials",
+    """*Note: 1 sensor is placed on the bottom of the punching bag during the boxing trials.
+         It should be disabled in analysis for trials other than boxing.""",
 ]
 
 ethics = """
@@ -239,7 +240,8 @@ contact = """
 Alexander Beattie, alexander.beattie@uef.fi
 """
 
-def generate_valid_markers(markers: list[str]) -> list[str]:
+
+def generate_valid_markers(markers: list[str]) -> set[str]:
     valid_markers: set[str] = set()
 
     for path in markers:
@@ -254,16 +256,12 @@ def generate_valid_markers(markers: list[str]) -> list[str]:
         if "id" not in df.columns:
             raise ValueError(f"CSV file {path} missing required 'id' column")
 
-        ids = (
-            df["id"]
-            .dropna()
-            .astype(str)
-            .str.strip()
-        )
+        ids = df["id"].dropna().astype(str).str.strip()
 
         valid_markers.update(ids)
 
-    return sorted(valid_markers)
+    return valid_markers
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process data.")
@@ -357,7 +355,11 @@ if __name__ == "__main__":
     )
 
     print(readme.build())
-    print("Valid Markers: \n")
-    print(generate_valid_markers([optical_participant_file,optical_bag_file,optical_tote_file]))
+    print(
+        "Valid Participant Markers: \n",
+        generate_valid_markers([optical_participant_file]),
+    )
+    print("Valid Bag Markers: \n", generate_valid_markers([optical_bag_file]))
+    print("Valid Tote Markers: \n", generate_valid_markers([optical_tote_file]))
 
     readme.write(os.path.join(args.output_dir, "readme.txt"))

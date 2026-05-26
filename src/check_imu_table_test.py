@@ -1,4 +1,5 @@
 from __future__ import annotations
+import pathlib
 
 import argparse
 import os
@@ -12,36 +13,22 @@ import numpy as np
 import pandas as pd
 from scipy.spatial.transform import Rotation as R
 
+TEST_FILENAME = "table_test_orientations.sto"
 
-def read_sto_file(filepath: Path)-> pd.DataFrame:
-    with open(filepath, "r") as f:
-        lines = f.readlines()
+PLOT_RESULTS = False
 
 
-    # Find the last non-empty line (this contains column names)
-    header_idx = None
-
-    for i, line in enumerate(lines):
-        if line.strip() == "":  # blank line
-            # next non-empty line is header
-            for j in range(i + 1, len(lines)):
-                if lines[j].strip():
-                    header_idx = j
-                    break
-            break
-
-    if header_idx is None:
-        raise ValueError("Could not find header line with columns.")
-
-    df = pd.read_csv(
-        filepath,
-        sep="\t",
-        skiprows=header_idx,
-        header=0,
-        index_col=0
-    )
+def read_sto_file(filepath: Path) -> pd.DataFrame:
+    print("Starting on: ", filepath)
+    with open(filepath, "r") as file:
+        # Skip header
+        for line in file:
+            if line.strip() == "endheader":
+                break
+        df = pd.read_csv(file, sep="\t", header=0, index_col=0)
 
     return df
+
 
 def collect_motion_files(
     root_dir: str,
@@ -57,7 +44,7 @@ def collect_motion_files(
             continue
 
         for fname in os.listdir(dir):
-            if not fname.endswith("orientations.sto"):
+            if not fname == TEST_FILENAME:
                 continue
 
             motion = fname.rsplit("-", 1)[0]
@@ -66,9 +53,11 @@ def collect_motion_files(
 
     return motions
 
+
 def parse_quaternion(q_str):
     """Convert string 'w,x,y,z' → list of floats"""
     return np.array([float(x) for x in q_str.split(",")])
+
 
 def quaternion_series_to_euler(series):
     """Convert a pandas Series of quaternion strings to Euler angles"""
@@ -82,6 +71,7 @@ def quaternion_series_to_euler(series):
     euler = rotations.as_euler("xyz", degrees=True)  # roll, pitch, yaw
 
     return euler
+
 
 def plot_euler(df, output_path):
     fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
@@ -115,22 +105,50 @@ def plot_euler(df, output_path):
     fig.savefig(output_path)
     plt.close(fig)
 
+
 def _process_single_file(args):
     participant, motion, f, output_dir = args
 
     path = Path(f)
     df = read_sto_file(path)
-    print(df)
+    # print(df)
 
-    output_file = output_dir / f"{participant}.png"
+    df_euler = pd.concat(
+        [
+            pd.DataFrame(
+                quaternion_series_to_euler(df[col]),
+                columns=[
+                    f"{col}_roll",
+                    f"{col}_pitch",
+                    f"{col}_yaw",
+                ],
+                index=df[col].dropna().index,
+            )
+            for col in df.columns
+        ],
+        axis=1,
+    )
+    print(df_euler)
+    means, stds = df_euler.mean().to_numpy(), df_euler.std().to_numpy()
 
-    plot_euler(df, output_file)
+    # interleave
+    summary = pd.DataFrame(
+        np.column_stack([means, stds]).reshape(1, -1),
+        columns=[f"{c}_{stat}" for c in df_euler.columns for stat in ["mean", "std"]],
+    )
+    print(summary)
+    summary_dict = summary.iloc[0].to_dict()
+
+    if PLOT_RESULTS:
+        output_file = output_dir / f"{participant}.png"
+        plot_euler(df, output_file)
 
     return {
         "participant": participant,
-        "motion": motion,
+        "trial": motion,
         "file": f,
         "df": df,
+        **summary_dict,
     }
 
 
@@ -143,7 +161,6 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
     # group by motion first (optional but usually useful)
     for motion, motion_df in summary_df.groupby("motion"):
-
         # collect per sensor: sensor -> participant -> euler
         sensor_data = {}
 
@@ -165,14 +182,14 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
         # plot per sensor
         for sensor, participants in sensor_data.items():
-
             fig, axes = plt.subplots(3, 1, figsize=(12, 9), sharex=True)
             ax_roll, ax_pitch, ax_yaw = axes
-            
+
             sorted_participants = sorted(
                 participants.items(),
-                key=lambda x: int("".join(filter(str.isdigit, str(x[0])))) 
-                if any(c.isdigit() for c in str(x[0])) else str(x[0])
+                key=lambda x: int("".join(filter(str.isdigit, str(x[0]))))
+                if any(c.isdigit() for c in str(x[0]))
+                else str(x[0]),
             )
 
             for participant, euler in sorted_participants:
@@ -197,26 +214,35 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
             fig.savefig(out_file)
             plt.close(fig)
 
-def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
-) -> pd.DataFrame:
-    summary_rows = []
 
-    tasks = []
-    for (participant, motion), files in motions.items():
-        print("Starting: ", participant, motion)
-        for f in files:
-            tasks.append((participant, motion, f, output_dir))
+def process_motion_files(
+    motions: Dict[Tuple[str, str], List[str]], output_dir: Path
+) -> pd.DataFrame:
+    tasks_stage1 = [
+        (participant, trial, f, output_dir)
+        for (participant, trial), files in motions.items()
+        for f in files
+    ]
 
     with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(_process_single_file, t) for t in tasks]
+        try:
+            results = list(executor.map(_process_single_file, tasks_stage1))
+        except KeyboardInterrupt:
+            print("Interrupted")
+            executor.shutdown(cancel_futures=True)
+            raise
 
-        for future in as_completed(futures):
-            summary_rows.append(future.result())
-
-    summary_df = pd.DataFrame(summary_rows)
-    aggregate_and_plot(summary_df, output_dir)
+    summary_df = pd.DataFrame(results)
+    if PLOT_RESULTS:
+        aggregate_and_plot(summary_df, output_dir)
     return summary_df
+
+
+def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
+    mean_row = df_subset.mean().round(2)
+    sd_row = df_subset.std().round(2)
+    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")
+    return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
 
 
 def main() -> None:
@@ -231,23 +257,86 @@ def main() -> None:
         default="out",
         help="Directory to save output CSV (default: current directory)",
     )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
-    )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir,exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
-    summary_df = process_motion_files(motions, output_dir, args.dry_run)
-    summary_df = summary_df.drop("file", axis=1)
+    summary_df = process_motion_files(motions, output_dir)
+    summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     print(summary_df)
+
     output_file = output_dir / "imu-table-test.csv"
     summary_df.to_csv(output_file, index=False)
 
+    # Calculate across all sensors
+    roll_cols = [c for c in summary_df.columns if "_roll_mean" in c]
+    pitch_cols = [c for c in summary_df.columns if "_pitch_mean" in c]
+    yaw_cols = [c for c in summary_df.columns if "_yaw_mean" in c]
+    summary_stats = pd.DataFrame(
+        {
+            "participant": summary_df["participant"],
+            "roll_mean": summary_df[roll_cols].mean(axis=1),
+            "roll_std": summary_df[roll_cols].std(axis=1),
+            "roll_delta": summary_df[roll_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
+            "pitch_mean": summary_df[pitch_cols].mean(axis=1),
+            "pitch_std": summary_df[pitch_cols].std(axis=1),
+            "pitch_delta": summary_df[pitch_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
+            "yaw_mean": summary_df[yaw_cols].mean(axis=1),
+            "yaw_std": summary_df[yaw_cols].std(axis=1),
+            "yaw_delta": summary_df[yaw_cols].apply(
+                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+            ),
+            # "yaw_delta":  summary_df[yaw_cols].max(axis=1)
+            # - summary_df[yaw_cols].min(axis=1),
+        }
+    )
+    print(summary_stats)
+
+    output_dir_latex = pathlib.Path("out")
+    output_file = output_dir_latex / "imu-table-test-per-participant.csv"
+    summary_stats.to_csv(output_file, index=False)
+
+    rename_map = {
+        "participant": "\#",
+        "roll_mean": r"X $\mu$",
+        "roll_std": r"X $\sigma$",
+        "roll_delta": r"X $\Delta$",
+        "pitch_mean": r"Y $\mu$",
+        "pitch_std": r"Y $\sigma$",
+        "pitch_delta": r"Y $\Delta$",
+        "yaw_mean": r"Z $\mu$",
+        "yaw_std": r"Z $\sigma$",
+        "yaw_delta": r"Z $\Delta$",
+    }
+
+    summary_stats = summary_stats.rename(columns=rename_map)
+
+    latex = summary_stats.to_latex(
+        index=False,
+        caption=(
+            "IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+            "All values are presented in degrees (°). "
+            "X,Y, and Z represent roll, pitch, and yaw respectively. "
+            "Sensors were placed on a flat, non-metallic table with the same orientation "
+            "after being removed from the participant at the end of each data collection session."
+        ),
+        label="tab:imu_table_test_per_participant",
+        escape=False,
+        float_format="%.2f",
+    )
+
+    print(latex)
+    output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
+    with open(output_file_latex, "w", newline="") as file:
+        file.write(latex)
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

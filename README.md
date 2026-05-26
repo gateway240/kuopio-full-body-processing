@@ -1,7 +1,7 @@
 # Kuopio Full Body Processing
 
 These scripts transform the raw Vicon and Xsens data into formats usable
-in OpenSim. 
+in OpenSim.
 
 ## Python processing
 
@@ -59,23 +59,41 @@ python src/check_dataset.py $OUTPUT_PATH/s02_extracted
  cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=on
  cd build
  make -j$(nproc)
-./main $OUTPUT_PATH/s02_extracted $OUTPUT_PATH/s03_aligned
+./main "$OUTPUT_PATH/s02_extracted" "$OUTPUT_PATH/s03_aligned" 2>&1 | tee "output_$(date +%Y%m%d_%H%M%S).txt"
 ```
 Add files manually if match doesn't exist (e.g. IMU wasn't recorded)
 
 Check results:
 ```bash
 python src/check_dataset.py $OUTPUT_PATH/s03_aligned
-python src/check_optical_nans.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH
-python src/check_imu_table_test.py $OUTPUT_PATH/imu_table_test_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
-python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/imu_table_test_extracted/_output
+python src/check_optical_data.py $OUTPUT_PATH/s03_aligned --output_dir $OUTPUT_PATH/technical_validation
+python src/check_imu_table_test.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/technical_validation
+python src/check_imu_continuity.py $OUTPUT_PATH/s02_extracted --output_dir $OUTPUT_PATH/technical_validation
+python src/check_imu_marker_correlation.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+python src/check_imu_marker_correlation_summary.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+python src/check_analog.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+python src/check_analog_summary.py $OUTPUT_PATH/s03_aligned/ --output_dir $OUTPUT_PATH/technical_validation
+```
+
+Debugging
+```bash
+python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH/emg/_output
+```
+## Graph Directory Structure
+
+```bash
+python src/dir_to_graph.py $OUTPUT_PATH -o images/dataset_graph.d2 --font-size 54
+d2 images/dataset_graph.d2 images/dataset_graph.png 
 ```
 
 ## Zip result
 ```bash
 cd $OUTPUT_PATH
-7z a -tzip -mmt=on kfb-s02_extracted.zip ./s02_extracted
-7z a -tzip -mmt=on kfb-s03_aligned.zip ./s03_aligned
+7z a -tzip -mmt=on s01_raw.zip ./s01_raw
+7z a -tzip -mmt=on s02_extracted.zip ./s02_extracted
+7z a -tzip -mmt=on s03_aligned.zip ./s03_aligned
+7z a -tzip -mmt=on technical_validation.zip ./technical_validation
 
 7z a -tzip -mmt=on kuopio-full-body-dataset.zip ./kuopio-full-body-dataset/
 ```
+
