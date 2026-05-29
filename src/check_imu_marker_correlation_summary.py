@@ -122,7 +122,7 @@ def main() -> None:
                 "The correlation values are unitless and bounded from 0 to 1. "
                 "The lag values are represented as frames from perfect alignment. "
                 "The 8 marker sensor pairs with the highest correlation are selected for each trial to create the summary statistics. "
-                "Further details for each individual trail can be found in ``imu-marker-correlation.csv'' "
+                "Further details for each individual trail can be found in ``imu-marker-sync.csv'' "
             ),
             label="tab:imu_marker_correlation_per_participant",
             position_float="centering",

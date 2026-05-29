@@ -125,7 +125,8 @@ def main() -> None:
             caption=(
                 "EMG signal-to-noise (SNR) ratio (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "All values are presented in decibels (dB). "
-                "This presents a summary of all trials available for a participant. "
+                "Signal values below 3 dB are excluded from analysis in this table. "
+                "This table presents a summary of all trials available for a participant. "
                 "For more granular per-trial metrics, see the provided ``emg-snr.csv'' file. "
                 "The first second of the trial represents the noise baseline and the "
                 "one second window in the trial with the largest amplitude represents the signal value. "
