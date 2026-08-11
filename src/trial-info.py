@@ -35,16 +35,21 @@ df = pd.read_csv(input_file)
 rename_map = {
     "label": "Trial",
     "description": "Description",
+    "group": "Group",
     "reps": "Reps",
-    "mocap": "Mocap",
+    "mocap": "MC",
     "imu": "IMU",
     "emg": "EMG",
+    "fp_l": "LF",
+    "fp_r": "RF"
 
 }
 num_participants = len(df)
 
 df.drop("description",axis=1, inplace=True)
 df["label"] = df["label"].map(lambda x: f"\\progfunc{{{x}}}")
+df["fp_l"] = df["fp_l"].map(lambda x: "-" if x == 0 else x)
+df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
 
 df = df.rename(columns=rename_map)
 
@@ -54,7 +59,7 @@ latex_output = df.to_latex(
     caption="22 Motion trials and available modalities for each contained in the dataset",
     label="tab:motion_trials",
     escape=False,
-    float_format="%.1f",
+    float_format="%d",
 )
 print(latex_output)
 with open(output_path, "w", newline="") as csvfile:

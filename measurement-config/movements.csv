@@ -1,23 +1,23 @@
-"#","label","description","reps","mocap","imu","emg"
-1,"static_cal","Static calibration","1x","y","y","y"
-2,"dyn_sara","Dynamic SARA","5x","y","y","y"
-3,"dyn_score_hip","Dynamic SCoRE Hip","2x","y","y","y"
-4,"dyn_score_ankle","Dynamic SCoRE Ankle","5x","y","y","y"
-5,"crouch_lift","Crouch,lift","5x","y","y","y"
-6,"crouch_rotate","Crouch,lift, rotate","5x","y","y","y"
-7,"curls","Dumbbell curls async","10x","y","y","y"
-8,"kettlebell","Kettlebell swings","10x","y","y","y"
-9,"squats_deep","Deep squats","5x","y","y","y"
-10,"half_jacks","Half-jacks","10x","y","y","y"
-11,"squat_jumps","Squat, jump, squat","3x","y","y","y"
-12,"box_jabs","Boxing - lead fist jabs","10x","y","y","y"
-13,"box_combos","Boxing - 1-2 combos","10x","y","y","y"
-14,"chair_push_right","MVIC: Chair push right","2x","n","y","y"
-15,"chair_push_left","MVIC: Chair push left","2x","n","y","y"
-16,"arm_hang","MVIC: Flexed arm hang","2x","n","y","y"
-17,"heavy_lift","MVIC: Heavy object lift","2x","n","y","y"
-18,"back_fly","MVIC: Back Fly","2x","n","y","y"
-19,"side_fly","MVIC: Dumbbell side fly","2x","n","y","y"
-20,"walking ","Treadmill walk [0.5-1.2 m/s]","60s","y","y","y"
-21,"jogging","Treadmill jog [1.0-2.0 m/s]","60s","y","y","y"
-22,"crab_walking","Treadmill crab walk [0.1-0.4 m/s]","60s","y","y","y"
+"#","label","description","group","reps","mocap","imu","emg","fp_l","fp_r"
+1,"static_cal","Static calibration","CAL","1x","y","y","y",1,1
+2,"dyn_sara","Dynamic SARA","CAL","5x","y","y","y",1,1
+3,"dyn_score_hip","Dynamic SCoRE Hip","CAL","2x","y","y","y",1,1
+4,"dyn_score_ankle","Dynamic SCoRE Ankle","CAL","5x","y","y","y",1,1
+5,"crouch_lift","Crouch,lift","FIT","5x","y","y","y",3,2
+6,"crouch_rotate","Crouch,lift, rotate","FIT","5x","y","y","y",3,2
+7,"curls","Dumbbell curls async","FIT","10x","y","y","y",3,2
+8,"kettlebell","Kettlebell swings","FIT","10x","y","y","y",3,2
+9,"squats_deep","Deep squats","FIT","5x","y","y","y",3,2
+10,"half_jacks","Half-jacks","FIT","10x","y","y","y",3,2
+11,"squat_jumps","Squat, jump, squat","FIT","3x","y","y","y",3,2
+12,"box_jabs","Boxing - lead fist jabs","BOX","10x","y","y","y",3,1
+13,"box_combos","Boxing - 1-2 combos","BOX","10x","y","y","y",3,1
+14,"chair_push_right","MVIC: Chair push right","MVIC","2x","n","y","y",0,0
+15,"chair_push_left","MVIC: Chair push left","MVIC","2x","n","y","y",0,0
+16,"arm_hang","MVIC: Flexed arm hang","MVIC","2x","n","y","y",0,0
+17,"heavy_lift","MVIC: Heavy object lift","MVIC","2x","n","y","y",3,2
+18,"back_fly","MVIC: Back Fly","MVIC","2x","n","y","y",3,2
+19,"side_fly","MVIC: Dumbbell side fly","MVIC","2x","n","y","y",3,2
+20,"walking ","Treadmill walk [0.5-1.2 m/s]","TR","60s","y","y","y",4,5
+21,"jogging","Treadmill jog [1.0-2.0 m/s]","TR","60s","y","y","y",4,5
+22,"crab_walking","Treadmill crab walk [0.1-0.4 m/s]","TR","60s","y","y","y",4,5
