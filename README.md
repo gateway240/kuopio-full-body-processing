@@ -30,7 +30,7 @@ For autocomplete to work:
  cmake . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=on
  cd build
  make -j$(nproc)
-./main $OUTPUT_PATH/s01_raw $OUTPUT_PATH/s02_extracted
+./main ~/data/kuopio-full-body-dataset/s01_raw $OUTPUT_PATH/s02_extracted
 ```
 
 ## Consolidate IMU Xsens
