@@ -8,7 +8,7 @@ TIMEZONE_OFFSET = 2 * 3600
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Match files and overwrite timestamps."
+        description="Match files and overwrite timestamps.",
     )
     parser.add_argument(
         "--input_dir",

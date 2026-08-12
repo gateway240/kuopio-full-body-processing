@@ -6,7 +6,6 @@ import pathlib
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,7 +19,7 @@ PLOT_RESULTS = False
 
 def read_sto_file(filepath: Path) -> pd.DataFrame:
     print("Starting on: ", filepath)
-    with open(filepath, "r") as file:
+    with Path(filepath).open("r") as file:
         # Skip header
         for line in file:
             if line.strip() == "endheader":
@@ -32,15 +31,15 @@ def read_sto_file(filepath: Path) -> pd.DataFrame:
 
 def collect_motion_files(
     root_dir: str,
-) -> DefaultDict[Tuple[str, str], List[str]]:
+) -> defaultdict[tuple[str, str], list[str]]:
     """
     Key = (participant, motion)
     """
-    motions: DefaultDict[Tuple[str, str], List[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
 
     for participant in os.listdir(root_dir):
         dir: str = os.path.join(root_dir, participant, "imu")
-        if not os.path.isdir(dir):
+        if not Path(dir).is_dir():
             continue
 
         for fname in os.listdir(dir):
@@ -49,7 +48,7 @@ def collect_motion_files(
 
             motion = fname.rsplit("-", 1)[0]
             path = os.path.join(dir, fname)
-            motions[(participant, motion)].append(path)
+            motions[participant, motion].append(path)
 
     return motions
 
@@ -187,9 +186,11 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
             sorted_participants = sorted(
                 participants.items(),
-                key=lambda x: int("".join(filter(str.isdigit, str(x[0]))))
-                if any(c.isdigit() for c in str(x[0]))
-                else str(x[0]),
+                key=lambda x: (
+                    int("".join(filter(str.isdigit, str(x[0]))))
+                    if any(c.isdigit() for c in str(x[0]))
+                    else str(x[0])
+                ),
             )
 
             for participant, euler in sorted_participants:
@@ -216,7 +217,8 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path
+    motions: dict[tuple[str, str], list[str]],
+    output_dir: Path,
 ) -> pd.DataFrame:
     tasks_stage1 = [
         (participant, trial, f, output_dir)
@@ -260,7 +262,7 @@ def main() -> None:
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
@@ -282,21 +284,24 @@ def main() -> None:
             "roll_mean": summary_df[roll_cols].mean(axis=1),
             "roll_std": summary_df[roll_cols].std(axis=1),
             "roll_delta": summary_df[roll_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",
+                axis=1,
             ),
             "pitch_mean": summary_df[pitch_cols].mean(axis=1),
             "pitch_std": summary_df[pitch_cols].std(axis=1),
             "pitch_delta": summary_df[pitch_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",
+                axis=1,
             ),
             "yaw_mean": summary_df[yaw_cols].mean(axis=1),
             "yaw_std": summary_df[yaw_cols].std(axis=1),
             "yaw_delta": summary_df[yaw_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",
+                axis=1,
             ),
             # "yaw_delta":  summary_df[yaw_cols].max(axis=1)
             # - summary_df[yaw_cols].min(axis=1),
-        }
+        },
     )
     print(summary_stats)
 
@@ -305,7 +310,7 @@ def main() -> None:
     summary_stats.to_csv(output_file, index=False)
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "roll_mean": r"X $\mu$",
         "roll_std": r"X $\sigma$",
         "roll_delta": r"X $\Delta$",
@@ -322,7 +327,7 @@ def main() -> None:
     latex = summary_stats.to_latex(
         index=False,
         caption=(
-            "IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+            r"IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
             "All values are presented in degrees (°). "
             "X,Y, and Z represent roll, pitch, and yaw respectively. "
             "Sensors were placed on a flat, non-metallic table with the same orientation "
@@ -335,8 +340,7 @@ def main() -> None:
 
     print(latex)
     output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    Path(output_file_latex).write_text(latex, encoding="utf-8", newline="")
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

@@ -4,7 +4,6 @@ import argparse
 import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Dict, List, Tuple
 
 import pandas as pd
 
@@ -155,9 +154,9 @@ def read_opensim_marker_file(
     return df.apply(pd.to_numeric, errors="coerce")
 
 
-def get_last_packet_counter(data_lines: List[str]) -> int:
+def get_last_packet_counter(data_lines: list[str]) -> int:
     last_line: str = data_lines[-1]
-    return int(last_line.split("\t")[0])
+    return int(last_line.split("\t", maxsplit=1)[0])
 
 
 def filter_motion_trials(
@@ -183,7 +182,7 @@ def collect_motion_files(root_dir: str):
         }
         # match
         for trial_name, trc_path in trc_files.items():
-            trials[(participant, trial_name)] = {
+            trials[participant, trial_name] = {
                 "participant": participant,
                 "trc": trc_path,
             }
@@ -236,7 +235,8 @@ def _process_single_trial(args):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], dry_run: bool = True
+    motions: dict[tuple[str, str], list[str]],
+    dry_run: bool = True,
 ) -> pd.DataFrame:
     tasks_stage1 = [
         (
@@ -271,7 +271,9 @@ def main() -> None:
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()
@@ -287,7 +289,7 @@ def main() -> None:
     print(summary_df)
     # Filter out empty sets so it doesn't print set() in the csv
     summary_df = summary_df.map(
-        lambda x: "" if isinstance(x, set) and len(x) == 0 else x
+        lambda x: "" if isinstance(x, set) and len(x) == 0 else x,
     )
     output_file = output_dir / "optical-continuity.csv"
     summary_df.to_csv(output_file, index=False)
@@ -306,11 +308,11 @@ def main() -> None:
     output_file = output_dir_latex / "optical-continuity-per-participant.csv"
     col = summary_stats.columns[0]
     summary_stats.assign(
-        **{col: summary_stats[col].map(lambda x: f"{int(x):02d}")}
+        **{col: summary_stats[col].map(lambda x: f"{int(x):02d}")},
     ).to_csv(output_file, index=False)
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "mean_nan_percent": r"$\mu$",
         "std_nan_percent": r"$\sigma$",
         "range_nan_percent": r"$\Delta$",
@@ -325,12 +327,13 @@ def main() -> None:
     }
 
     latex = (
-        summary_stats.style.format(fmt)
+        summary_stats.style
+        .format(fmt)
         .hide(axis="index")
         .to_latex(
             caption=(
-                "Optical continuity  (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
-                "The values represent the percentage (\%) of optical data points "
+                r"Optical continuity  (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                r"The values represent the percentage (\%) of optical data points "
                 "in all trials for a given participant which contained NaN values."
             ),
             label="tab:optical_continuity_per_participant",
@@ -341,8 +344,7 @@ def main() -> None:
 
     print(latex)
     output_file_latex = output_dir_latex / "optical-continuity-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    Path(output_file_latex).write_text(latex, newline="")
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

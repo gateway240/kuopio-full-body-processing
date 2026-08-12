@@ -9,7 +9,7 @@ set(TARGET "main" CACHE STRING "main")
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -march=native")
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find and hook up to OpenSim.
 # ----------------------------
 find_package(OpenSim REQUIRED PATHS "${OPENSIM_INSTALL_DIR}")

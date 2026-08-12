@@ -54,7 +54,9 @@ def main() -> None:
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()
@@ -68,13 +70,13 @@ def main() -> None:
 
     # Filter out SNRs below threshold
     summary_df[snr_cols] = summary_df[snr_cols].applymap(
-        lambda x: x if x >= SNR_THRESHOLD else pd.NA
+        lambda x: x if x >= SNR_THRESHOLD else pd.NA,
     )
 
     # Define a function to calculate stats per participant
     def calculate_participant_stats(group):
         # Flatten all SNR columns into a 1D array and remove NaNs
-        values = group[snr_cols].values.flatten()
+        values = group[snr_cols].to_numpy().flatten()
         values = values[~pd.isna(values)]
 
         # Compute mean, std, and range
@@ -83,12 +85,13 @@ def main() -> None:
         snr_range = f"{values.min():.1f} – {values.max():.1f}"
 
         return pd.Series(
-            {"snr_mean": snr_mean, "snr_std": snr_std, "snr_range": snr_range}
+            {"snr_mean": snr_mean, "snr_std": snr_std, "snr_range": snr_range},
         )
 
     # Apply the function per participant
     summary_stats = (
-        summary_df.groupby("participant")
+        summary_df
+        .groupby("participant")
         .apply(calculate_participant_stats)
         .reset_index()
     )
@@ -99,11 +102,12 @@ def main() -> None:
     output_file = output_dir_latex / "emg-snr-per-participant.csv"
     col = summary_stats.columns[0]
     summary_stats.assign(**{col: summary_stats[col].map(lambda x: f"{x:02d}")}).to_csv(
-        output_file, index=False
+        output_file,
+        index=False,
     )
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "snr_mean": r"SNR $\mu$",
         "snr_std": r"SNR $\sigma$",
         "snr_range": r"SNR $\Delta$",
@@ -117,15 +121,16 @@ def main() -> None:
             col: "{:.2f}"
             for col in summary_stats.columns[1:]
             if pd.api.types.is_numeric_dtype(summary_stats[col])
-        }
+        },
     )
 
     latex = (
-        summary_stats.style.format(fmt)
+        summary_stats.style
+        .format(fmt)
         .hide(axis="index")
         .to_latex(
             caption=(
-                "EMG signal-to-noise (SNR) ratio (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                r"EMG signal-to-noise (SNR) ratio (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "All values are presented in decibels (dB). "
                 "Signal values below 3 dB are excluded from analysis in this table. "
                 "This table presents a summary of all trials available for a participant. "
@@ -141,8 +146,7 @@ def main() -> None:
 
     print(latex)
     output_file_latex = output_dir_latex / "emg-snr-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    Path(output_file_latex).write_text(latex, newline="")
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

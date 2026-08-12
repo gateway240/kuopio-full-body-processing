@@ -4,7 +4,6 @@ import argparse
 import os
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
-from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -76,7 +75,7 @@ KNOWN_TRIALS = {
 
 def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
     print("Starting on: ", file_path)
-    with open(file_path, "r") as file:
+    with Path(file_path).open("r") as file:
         # Skip header
         for line in file:
             if line.strip() == "endheader":
@@ -102,7 +101,7 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
 
         # Parse column into array
         arr = np.vstack(
-            df[col].astype(str).apply(lambda x: np.fromstring(x, sep=",")).values
+            df[col].astype(str).apply(lambda x: np.fromstring(x, sep=",")).values,
         )
         if arr.shape[1] == 3:
             # Create new columns
@@ -155,7 +154,7 @@ def collect_motion_files(root_dir: str):
         imu_dir = os.path.join(root_dir, participant, "imu")
         mocap_dir = os.path.join(root_dir, participant, "mocap")
         print("IMU dir: ", imu_dir, " Mocap dir: ", mocap_dir)
-        if not os.path.isdir(imu_dir) or not os.path.isdir(mocap_dir):
+        if not Path(imu_dir).is_dir() or not Path(mocap_dir).is_dir():
             print("ERROR in dir!")
             continue
 
@@ -169,7 +168,7 @@ def collect_motion_files(root_dir: str):
         # match
         for trial_name, path in analog_files.items():
             # if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
-            trials[(participant, trial_name)] = {
+            trials[participant, trial_name] = {
                 "participant": participant,
                 "analog": path,
             }
@@ -209,7 +208,8 @@ def butter_bandpass_filter(
 
     data_interp = data.copy()
     data_interp[cols_to_filter] = data_interp[cols_to_filter].interpolate(
-        method="linear", limit_direction="both"
+        method="linear",
+        limit_direction="both",
     )
 
     filtered_values = filtfilt(b, a, data_interp[cols_to_filter].values, axis=0)
@@ -307,7 +307,10 @@ def _process_single_trial(args):
         # ---- APPLY BANDPASS FILTER ----
         # https://wiki.has-motion.com/doku.php?id=visual3d:tutorials:emg:typical_emg_processing
         emg_df_filtered = butter_bandpass_filter(
-            emg_df, lowcut=50, highcut=500, order=4
+            emg_df,
+            lowcut=50,
+            highcut=500,
+            order=4,
         )
         result = {
             "participant": participant,
@@ -339,7 +342,9 @@ def _calculate_single_trial(args):
         window_size = WINDOW_SIZE
         for col in emg_df.columns:
             snr, best_start = compute_snr(
-                emg_df[col].values, baseline_size, window_size
+                emg_df[col].values,
+                baseline_size,
+                window_size,
             )
             snr_dict[col] = snr
             best_windows[col] = best_start
@@ -347,7 +352,12 @@ def _calculate_single_trial(args):
         if PLOT_RESULTS:
             save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
             plot_emg_signals(
-                emg_df, snr_dict, best_windows, baseline_size, window_size, save_path
+                emg_df,
+                snr_dict,
+                best_windows,
+                baseline_size,
+                window_size,
+                save_path,
             )
 
     except Exception as e:
@@ -367,7 +377,7 @@ def _calculate_single_trial(args):
 # 5. PIPELINE
 # ---------------------------
 def process_motion_files(
-    motions: Dict,
+    motions: dict,
     output_dir: Path,
 ):
     tasks_stage1 = [
@@ -403,7 +413,9 @@ def main() -> None:
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()
@@ -416,7 +428,7 @@ def main() -> None:
     summary_df = summary_df.sort_values(["participant", "trial"])
     # Filter out empty sets so it doesn't print set() in the csv
     summary_df = summary_df.map(
-        lambda x: "" if isinstance(x, set) and len(x) == 0 else x
+        lambda x: "" if isinstance(x, set) and len(x) == 0 else x,
     )
     # fill NaN only in numeric columns
     numeric_cols = summary_df.select_dtypes(include="number").columns
@@ -425,7 +437,8 @@ def main() -> None:
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
     summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(
-        output_file, index=False
+        output_file,
+        index=False,
     )
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")

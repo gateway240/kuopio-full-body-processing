@@ -96,7 +96,13 @@ def emit_raw_files(lines, parent_id, files, root_name, session_name, font_size):
 
 
 def emit_grouped_files(
-    lines, parent_id, root_name, session_name, participants, modality, font_size
+    lines,
+    parent_id,
+    root_name,
+    session_name,
+    participants,
+    modality,
+    font_size,
 ):
     groups = defaultdict(list)
 
@@ -181,8 +187,7 @@ def generate(root_dir, lines, out, font_size):
 
     build(root, lines, font_size)
 
-    with open(out, "w") as f:
-        f.write("\n".join(lines))
+    Path(out).write_text("\n".join(lines))
 
     print(f"Generated: {out}")
 

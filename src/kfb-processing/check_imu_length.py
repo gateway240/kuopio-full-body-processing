@@ -2,23 +2,21 @@ from __future__ import annotations
 
 import argparse
 import os
+import pathlib
 from collections import defaultdict
-from typing import DefaultDict, Dict, List, Tuple
 
 
-def read_data_lines(filepath: str) -> Tuple[List[str], List[str]]:
+def read_data_lines(filepath: str) -> tuple[list[str], list[str]]:
     header_lines = []
     data_lines = []
     # print(filepath)
-    with open(filepath, "r", encoding="utf-8") as f:
+    with pathlib.Path(filepath).open("r", encoding="utf-8") as f:
         for line in f:
             # print(line)
             stripped = line.strip()
             if not stripped:
                 continue
-            elif stripped.startswith("//"):
-                header_lines.append(line)
-            elif "PacketCounter" in stripped:
+            if stripped.startswith("//") or "PacketCounter" in stripped:
                 header_lines.append(line)
             else:
                 data_lines.append(line)
@@ -26,22 +24,22 @@ def read_data_lines(filepath: str) -> Tuple[List[str], List[str]]:
     return header_lines, data_lines
 
 
-def get_last_packet_counter(data_lines: List[str]) -> int:
+def get_last_packet_counter(data_lines: list[str]) -> int:
     last_line: str = data_lines[-1]
-    return int(last_line.split("\t")[0])
+    return int(last_line.split("\t", maxsplit=1)[0])
 
 
 def collect_motion_files(
     root_dir: str,
-) -> DefaultDict[Tuple[str, str], List[str]]:
+) -> defaultdict[tuple[str, str], list[str]]:
     """
     Key = (participant, motion)
     """
-    motions: DefaultDict[Tuple[str, str], List[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
 
     for participant in os.listdir(root_dir):
         imu_dir: str = os.path.join(root_dir, participant, "imu")
-        if not os.path.isdir(imu_dir):
+        if not pathlib.Path(imu_dir).is_dir():
             continue
 
         for fname in os.listdir(imu_dir):
@@ -50,16 +48,16 @@ def collect_motion_files(
 
             motion = fname.rsplit("-", 1)[0]
             path = os.path.join(imu_dir, fname)
-            motions[(participant, motion)].append(path)
+            motions[participant, motion].append(path)
 
     return motions
 
 
 def trim_data_by_packet(
-    header_lines: List[str],
-    data_lines: List[str],
+    header_lines: list[str],
+    data_lines: list[str],
     max_packet: int,
-) -> List[str]:
+) -> list[str]:
     """
     Keeps all header lines and only data lines with PacketCounter <= max_packet
     """
@@ -68,11 +66,12 @@ def trim_data_by_packet(
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], dry_run: bool = True
+    motions: dict[tuple[str, str], list[str]],
+    dry_run: bool = True,
 ) -> int:
     processed_files = 0
     for (participant, motion), files in motions.items():
-        file_data: Dict[str, Tuple[List[str], List[str]]] = {}
+        file_data: dict[str, tuple[list[str], list[str]]] = {}
 
         for f in files:
             header, data = read_data_lines(f)
@@ -82,7 +81,7 @@ def process_motion_files(
             # print()
 
         # Get last packet counter per file
-        last_packets: Dict[str, int] = {
+        last_packets: dict[str, int] = {
             f: get_last_packet_counter(data) for f, (_, data) in file_data.items()
         }
 
@@ -95,7 +94,7 @@ def process_motion_files(
         #     print(f"  {os.path.basename(f)}: {l} lines")
 
         shortest_file: str = min(last_packets, key=lambda f: last_packets[f])
-        shortest_data: List[str] = file_data[shortest_file][1]
+        shortest_data: list[str] = file_data[shortest_file][1]
         last_packet: int = get_last_packet_counter(shortest_data)
 
         print(f"  → Shortest file: {os.path.basename(shortest_file)}")
@@ -105,12 +104,12 @@ def process_motion_files(
             trimmed_lines = trim_data_by_packet(header, data, last_packet)
 
             if not dry_run:
-                with open(f, "w") as out:
+                with pathlib.Path(f).open("w") as out:
                     out.writelines(trimmed_lines)
 
             print(
                 f"  {os.path.basename(f)}: "
-                f"{len(data) + len(header)} → {len(trimmed_lines)} lines"
+                f"{len(data) + len(header)} → {len(trimmed_lines)} lines",
             )
         processed_files += 1
     return processed_files
@@ -124,7 +123,9 @@ def main() -> None:
         help="Root directory containing subject folders",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()

@@ -56,7 +56,9 @@ def main() -> None:
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()
@@ -66,14 +68,16 @@ def main() -> None:
     input_file = output_dir / "imu-marker-sync.csv"
     summary_df = pd.read_csv(input_file)
     top_corr = (
-        summary_df.sort_values("best_corr", ascending=False)
+        summary_df
+        .sort_values("best_corr", ascending=False)
         .groupby(["participant", "trial"], group_keys=False)
         .head(PAIRS_TO_SELECT)
     )
 
     # Aggregate statistics per participant across all trials
     summary_stats = (
-        top_corr.groupby("participant")
+        top_corr
+        .groupby("participant")
         .agg(
             corr_mean=("best_corr", "mean"),
             corr_std=("best_corr", "std"),
@@ -89,11 +93,12 @@ def main() -> None:
     output_file = output_dir_latex / "imu-marker-correlation-per-participant.csv"
     col = summary_stats.columns[0]
     summary_stats.assign(**{col: summary_stats[col].map(lambda x: f"{x:02d}")}).to_csv(
-        output_file, index=False
+        output_file,
+        index=False,
     )
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "corr_mean": r"Corr $\mu$",
         "corr_std": r"Corr $\sigma$",
         "corr_range": r"Corr $\Delta$",
@@ -110,15 +115,16 @@ def main() -> None:
             col: "{:.2f}"
             for col in summary_stats.columns[1:]
             if pd.api.types.is_numeric_dtype(summary_stats[col])
-        }
+        },
     )
 
     latex = (
-        summary_stats.style.format(fmt)
+        summary_stats.style
+        .format(fmt)
         .hide(axis="index")
         .to_latex(
             caption=(
-                "Optical Marker IMU sensor temporal alignment (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                r"Optical Marker IMU sensor temporal alignment (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "The correlation values are unitless and bounded from 0 to 1. "
                 "The lag values are represented as frames from perfect alignment. "
                 "The 8 marker sensor pairs with the highest correlation are selected for each trial to create the summary statistics. "
@@ -132,8 +138,7 @@ def main() -> None:
 
     print(latex)
     output_file_latex = output_dir_latex / "imu-marker-correlation-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    Path(output_file_latex).write_text(latex, newline="")
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

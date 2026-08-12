@@ -1,7 +1,13 @@
 import argparse
+import logging
 import os
+import pathlib
 
 import pandas as pd
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 parser = argparse.ArgumentParser(description="Process data.")
 parser.add_argument(
@@ -60,5 +66,4 @@ latex_output = df.to_latex(
     float_format="%d",
 )
 print(latex_output)
-with open(output_path, "w", newline="") as csvfile:
-    csvfile.write(latex_output)
+pathlib.Path(output_path).write_text(latex_output, newline="")

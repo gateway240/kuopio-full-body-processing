@@ -1,5 +1,6 @@
 import argparse
 import os
+import pathlib
 
 import numpy as np
 import pandas as pd
@@ -54,7 +55,8 @@ num_participants = len(numeric_df)
 index_list = [r"$\mu$", r"$\sigma$", r"$\Delta$"]
 
 summary_basic = summary_table(
-    numeric_df[cols_basic].rename(columns=rename_map), index_list
+    numeric_df[cols_basic].rename(columns=rename_map),
+    index_list,
 )
 
 latex_demographics = summary_basic.to_latex(
@@ -65,8 +67,7 @@ latex_demographics = summary_basic.to_latex(
     float_format="%.1f",
 )
 print(latex_demographics)
-with open(output_demographic, "w", newline="") as csvfile:
-    csvfile.write(latex_demographics)
+pathlib.Path(output_demographic).write_text(latex_demographics, newline="")
 
 
 cols_custom = [
@@ -155,5 +156,4 @@ latex_dimensions = summary_transposed.to_latex(
 
 print(latex_dimensions)
 
-with open(output_dimensions, "w", newline="") as csvfile:
-    csvfile.write(latex_dimensions)
+pathlib.Path(output_dimensions).write_text(latex_dimensions, newline="")

@@ -10,8 +10,9 @@ Setting the export path and configuring the env (`python -m venv .venv` or `uv v
 ```py
 export OUTPUT_PATH=~/data/kuopio-full-body-dataset
 export OUTPUT_PATH=out/kuopio-full-body-dataset
+uv venv --python 3.12
 source .venv/bin/activate
-uv pip install -e .[dev]
+uv pip install -e '.[dev]'
 ```
 
 ### Dataset readme generation

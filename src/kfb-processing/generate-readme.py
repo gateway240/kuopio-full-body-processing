@@ -1,13 +1,18 @@
 import argparse
 import csv
+import logging
 import os
 from pathlib import Path
-from typing import Any, Callable, Self, Union
+from typing import Any, Self
 
 import pandas as pd
 from tabulate import tabulate
 
 config_dir = "measurement-config"
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class ReadmeBuilder:
@@ -20,7 +25,7 @@ class ReadmeBuilder:
         self.format = fmt.lower()
         if self.format not in {"text", "html"}:
             self.format = "text"
-            print("Format must be 'text' or 'html'")
+            logger.info("Format must be 'text' or 'html'")
         self.sections: list[str] = []
 
     # --------------------------
@@ -47,8 +52,6 @@ class ReadmeBuilder:
     def _render_list(
         self,
         items: list[str],
-        ordered: bool = False,
-        prefix: Union[str, Callable[[int], str], None] = None,
     ) -> str:
         """
         Render a list.
@@ -60,37 +63,30 @@ class ReadmeBuilder:
         """
         # HTML rendering
         if self.format == "html":
-            tag = "ol" if ordered else "ul"
+            tag = "ul"
             li = "\n".join(f"<li>{item}</li>" for item in items)
             return f"<{tag}>\n{li}\n</{tag}>"
 
-        # Plain text prefix logic
-        def get_prefix(i: int) -> str:
-            if callable(prefix):
-                return prefix(i)
-            if prefix is not None:
-                return prefix
-            return f"{i + 1}." if ordered else "-"
-
         # Plain text rendering
-        lines = [f"{get_prefix(i)} {item}" for i, item in enumerate(items)]
+        lines = [f"- {item}" for i, item in enumerate(items)]
         return "\n".join(lines) + "\n"
 
     def _render_code(self, code: str) -> str:
         if self.format == "html":
             return f"<pre><code>{code.strip()}</code></pre>"
-        else:
-            lines = ["---- CODE ----", code.strip(), "--------------"]
-            return "\n".join(lines) + "\n"
+        lines = ["---- CODE ----", code.strip(), "--------------"]
+        return "\n".join(lines) + "\n"
 
     def _render_table(
-        self, rows: list[list[str]], headers: list[str], tablefmt: str
+        self,
+        rows: list[list[str]],
+        headers: list[str],
+        tablefmt: str,
     ) -> Any:
         if self.format == "html":
             # tabulate supports HTML format directly
             return tabulate(rows, headers=headers, tablefmt="html")
-        else:
-            return tabulate(rows, headers=headers, tablefmt=tablefmt) + "\n"
+        return tabulate(rows, headers=headers, tablefmt=tablefmt) + "\n"
 
     # --------------------------
     # Public API
@@ -104,15 +100,15 @@ class ReadmeBuilder:
         self.sections.append(self._render_paragraph(text))
         return self
 
-    def add_list(self, items: list[str], ordered: bool = False) -> Self:
-        self.sections.append(self._render_list(items, ordered))
+    def add_list(self, items: list[str]) -> Self:
+        self.sections.append(self._render_list(items))
         return self
 
     def add_csv_table(self, csv_path: str, tablefmt: str) -> Self:
-        if not os.path.exists(csv_path):
+        if not Path(csv_path).exists():
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
 
-        with open(csv_path, newline="", encoding="utf-8") as f:
+        with Path(csv_path).open(newline="", encoding="utf-8") as f:
             reader = csv.reader(f)
             data = list(reader)
 
@@ -137,7 +133,7 @@ class ReadmeBuilder:
             filepath = "README.html" if self.format == "html" else "README.txt"
 
         Path(filepath).write_text(self.build(), encoding="utf-8")
-        print(f"README generated at {filepath}")
+        logger.info("README generated at %s", filepath)
 
 
 intro = """
@@ -245,7 +241,7 @@ def generate_valid_markers(markers: list[str]) -> set[str]:
     valid_markers: set[str] = set()
 
     for path in markers:
-        if not os.path.exists(path):
+        if not Path(path).exists():
             raise FileNotFoundError(f"CSV file not found: {path}")
 
         df = pd.read_csv(path)
@@ -283,10 +279,8 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     doc_fmt = args.doc_fmt
-    config_dir = "measurement-config"
-    optical_participant_file = os.path.join(
-        config_dir, "optical-marker-participant.csv"
-    )
+    config_dir = Path("measurement-config")
+    optical_participant_file = config_dir / "optical-marker-participant.csv"
     optical_bag_file = os.path.join(config_dir, "optical-marker-bag.csv")
     optical_tote_file = os.path.join(config_dir, "optical-marker-tote.csv")
     emg_file = os.path.join(config_dir, "emg-sensor-mappings.csv")
@@ -354,12 +348,12 @@ if __name__ == "__main__":
         # )
     )
 
-    print(readme.build())
-    print(
-        "Valid Participant Markers: \n",
+    logger.info(readme.build())
+    logger.info(
+        "Valid Participant Markers: %s",
         generate_valid_markers([optical_participant_file]),
     )
-    print("Valid Bag Markers: \n", generate_valid_markers([optical_bag_file]))
-    print("Valid Tote Markers: \n", generate_valid_markers([optical_tote_file]))
+    logger.info("Valid Bag Markers: %s", generate_valid_markers([optical_bag_file]))
+    logger.info("Valid Tote Markers: %s", generate_valid_markers([optical_tote_file]))
 
     readme.write(os.path.join(args.output_dir, "readme.txt"))

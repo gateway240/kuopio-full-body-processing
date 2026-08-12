@@ -5,14 +5,13 @@ import os
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple
 
 import numpy as np
 import pandas as pd
 
 
 def read_file(filepath: Path) -> pd.DataFrame:
-    with open(filepath, "r") as f:
+    with Path(filepath).open("r") as f:
         lines = f.readlines()
 
     # Find the last non-empty line (this contains column names)
@@ -38,15 +37,15 @@ def read_file(filepath: Path) -> pd.DataFrame:
 
 def collect_motion_files(
     root_dir: str,
-) -> DefaultDict[Tuple[str, str], List[str]]:
+) -> defaultdict[tuple[str, str], list[str]]:
     """
     Key = (participant, motion)
     """
-    motions: DefaultDict[Tuple[str, str], List[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
 
     for participant in os.listdir(root_dir):
         dir: str = os.path.join(root_dir, participant, "imu")
-        if not os.path.isdir(dir):
+        if not Path(dir).is_dir():
             continue
 
         for fname in os.listdir(dir):
@@ -55,7 +54,7 @@ def collect_motion_files(
 
             motion = fname.rsplit("-", 1)[0]
             path = os.path.join(dir, fname)
-            motions[(participant, motion)].append(path)
+            motions[participant, motion].append(path)
 
     return motions
 
@@ -108,7 +107,7 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
     if coerced.isna().any().any():
         nan_locs = np.where(coerced.isna())
         errors.append(
-            f"Non-numeric/NaN values found at rows={nan_locs[0][:10]}, cols={nan_locs[1][:10]}"
+            f"Non-numeric/NaN values found at rows={nan_locs[0][:10]}, cols={nan_locs[1][:10]}",
         )
 
     return errors
@@ -137,7 +136,8 @@ def _process_single_file(args):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
+    motions: dict[tuple[str, str], list[str]],
+    output_dir: Path,
 ) -> pd.DataFrame:
     summary_rows = []
 
@@ -170,12 +170,14 @@ def main() -> None:
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
+        "--dry-run",
+        action="store_true",
+        help="If set, do not write any output files.",
     )
 
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     motions = collect_motion_files(args.source_dir)
     # print(motions)
@@ -183,10 +185,11 @@ def main() -> None:
     summary_df = summary_df.drop("file", axis=1)
     summary_df = summary_df.drop("df", axis=1)
     summary_df = summary_df.map(
-        lambda x: "" if isinstance(x, list) and len(x) == 0 else x
+        lambda x: "" if isinstance(x, list) and len(x) == 0 else x,
     )
     summary_df = (
-        summary_df.sort_values(["participant", "trial"])
+        summary_df
+        .sort_values(["participant", "trial"])
         .groupby(["participant", "trial"], as_index=False)
         .first()
     )
