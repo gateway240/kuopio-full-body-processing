@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import pathlib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+if TYPE_CHECKING:
+    from pandas.io.formats.style_render import ExtFormatter
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 PLOT_RESULTS = False
 
@@ -69,12 +79,12 @@ def main() -> None:
     snr_cols = [c for c in summary_df.columns if c not in exclude_cols]
 
     # Filter out SNRs below threshold
-    summary_df[snr_cols] = summary_df[snr_cols].applymap(
+    summary_df[snr_cols] = summary_df[snr_cols].map(
         lambda x: x if x >= SNR_THRESHOLD else pd.NA,
     )
 
     # Define a function to calculate stats per participant
-    def calculate_participant_stats(group):
+    def calculate_participant_stats(group: pd.DataFrame) -> pd.Series:
         # Flatten all SNR columns into a 1D array and remove NaNs
         values = group[snr_cols].to_numpy().flatten()
         values = values[~pd.isna(values)]
@@ -82,21 +92,16 @@ def main() -> None:
         # Compute mean, std, and range
         snr_mean = values.mean() if len(values) > 0 else pd.NA
         snr_std = values.std(ddof=1) if len(values) > 1 else pd.NA
-        snr_range = f"{values.min():.1f} – {values.max():.1f}"
+        snr_range = f"{values.min():.1f} – {values.max():.1f}"  # ruff: ignore[ambiguous-unicode-character-string]
 
         return pd.Series(
             {"snr_mean": snr_mean, "snr_std": snr_std, "snr_range": snr_range},
         )
 
     # Apply the function per participant
-    summary_stats = (
-        summary_df
-        .groupby("participant")
-        .apply(calculate_participant_stats)
-        .reset_index()
-    )
+    summary_stats = summary_df.groupby("participant").apply(calculate_participant_stats).reset_index()
 
-    print(summary_stats)
+    logger.info(summary_stats)
 
     output_dir_latex = pathlib.Path("out")
     output_file = output_dir_latex / "emg-snr-per-participant.csv"
@@ -115,13 +120,9 @@ def main() -> None:
 
     summary_stats = summary_stats.rename(columns=rename_map)
 
-    fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
+    fmt: ExtFormatter = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
     fmt.update(
-        {
-            col: "{:.2f}"
-            for col in summary_stats.columns[1:]
-            if pd.api.types.is_numeric_dtype(summary_stats[col])
-        },
+        {col: "{:.2f}" for col in summary_stats.columns[1:] if pd.api.types.is_numeric_dtype(summary_stats[col])},
     )
 
     latex = (
@@ -130,7 +131,8 @@ def main() -> None:
         .hide(axis="index")
         .to_latex(
             caption=(
-                r"EMG signal-to-noise (SNR) ratio (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                "EMG signal-to-noise (SNR) ratio "
+                r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "All values are presented in decibels (dB). "
                 "Signal values below 3 dB are excluded from analysis in this table. "
                 "This table presents a summary of all trials available for a participant. "
@@ -144,11 +146,11 @@ def main() -> None:
         )
     )
 
-    print(latex)
+    logger.info(latex)
     output_file_latex = output_dir_latex / "emg-snr-per-participant.txt"
-    Path(output_file_latex).write_text(latex, newline="")
+    Path(output_file_latex).write_text(latex, encoding="utf-8", newline="")
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

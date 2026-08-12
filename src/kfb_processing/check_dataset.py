@@ -1,6 +1,12 @@
 import argparse
-import os
+import logging
 import pathlib
+from pathlib import Path
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # -------------------------
 # Configuration
@@ -54,9 +60,9 @@ def expected_files(labels: list[str], suffixes: list[str]) -> set[str]:
 
 
 def check_folder(
-    folder_path: str,
+    folder_path: Path,
     expected: set[str],
-) -> tuple[set[str], set[str], bool]:
+) -> tuple[set[str], set[Path], bool]:
     """
     Returns:
         missing files,
@@ -66,66 +72,62 @@ def check_folder(
     if not pathlib.Path(folder_path).is_dir():
         return expected, set(), True
 
-    actual: set[str] = {
-        f
-        for f in os.listdir(folder_path)
-        if pathlib.Path(os.path.join(folder_path, f)).is_file()
-    }
+    actual = {f for f in Path.iterdir(folder_path) if (folder_path / f).is_file()}
 
-    missing: set[str] = expected - actual
-    extra: set[str] = actual - expected
+    missing = expected - actual
+    extra = actual - expected
 
     return missing, extra, False
 
 
-def check_subject(subject_dir: str, subject_id: str) -> None:
-    imu_dir: str = os.path.join(subject_dir, "imu")
-    mocap_dir: str = os.path.join(subject_dir, "mocap")
+def check_subject(subject_dir: Path, subject_id: str) -> None:
+    imu_dir = subject_dir / "imu"
+    mocap_dir = subject_dir / "mocap"
 
     imu_expected: set[str] = expected_files(LABELS, IMU_SUFFIXES)
     mocap_expected: set[str] = expected_files(LABELS, MOCAP_SUFFIXES)
 
-    imu_missing, imu_extra, imu_missing_dir = check_folder(imu_dir, imu_expected)
-    mocap_missing, mocap_extra, mocap_missing_dir = check_folder(
+    imu_missing, _imu_extra, imu_missing_dir = check_folder(imu_dir, imu_expected)
+    mocap_missing, _mocap_extra, mocap_missing_dir = check_folder(
         mocap_dir,
         mocap_expected,
     )
 
-    print(f"\nSubject {subject_id}")
+    logger.info("Subject %s", subject_id)
 
-    print("  [IMU]")
+    logger.info("  [IMU]")
     if imu_missing_dir:
-        print("    WARN: imu folder is MISSING!")
+        logger.info("    WARN: imu folder is MISSING!")
     elif imu_missing:
-        print("    Missing files:")
+        logger.info("    Missing files:")
         for f in sorted(imu_missing):
-            print(f"      - {f}")
+            logger.info("      - %s", f)
     else:
-        print("    No missing files")
+        logger.info("    No missing files")
 
         # if imu_extra:
-        #     print("    Extra files found:")
+        #     logger.info("    Extra files found:")
         #     for f in sorted(imu_extra):
-        #         print(f"      - {f}")
+        #         logger.info(f"      - {f}")
         # else:
-        #     print("    No extra files")
+        #     logger.info("    No extra files")
 
-    print("  [MOCAP]")
+    logger.info("  [MOCAP]")
     if mocap_missing_dir:
-        print("    WARN: mocap folder is MISSING!")
+        logger.info("    WARN: mocap folder is MISSING!")
     elif mocap_missing:
-        print("    Missing files:")
+        logger.info("    Missing files:")
         for f in sorted(mocap_missing):
-            print(f"      - {f}")
+            logger.info("      - %s", f)
     else:
-        print("    No missing files")
+        logger.info("    No missing files")
 
         # if mocap_extra:
-        #     print("    Extra files found:")
+        #     logger.info("    Extra files found:")
         #     for f in sorted(mocap_extra):
-        #         print(f"      - {f}")
+        #         logger.info(f"      - {f}")
         # else:
-        #     print("    No extra files")
+        #     logger.info("    No extra files")
 
 
 # -------------------------
@@ -133,39 +135,36 @@ def check_subject(subject_dir: str, subject_id: str) -> None:
 # -------------------------
 
 
-def check_dataset(root_dir: str) -> None:
-    if not pathlib.Path(root_dir).is_dir():
-        raise ValueError(f"Not a directory: {root_dir}")
+def check_dataset(root_dir: Path) -> None:
+    if not root_dir.is_dir():
+        msg = f"Not a directory: {root_dir}"
+        raise ValueError(msg)
 
-    actual_subjects: set[str] = {
-        d
-        for d in os.listdir(root_dir)
-        if pathlib.Path(os.path.join(root_dir, d)).is_dir()
-    }
+    actual_subjects = {d for d in Path.iterdir(root_dir) if (root_dir / d).is_dir()}
 
-    expected_subjects: set[str] = set(SUBJECT_IDS)
+    expected_subjects = set(SUBJECT_IDS)
 
-    missing_subjects: set[str] = expected_subjects - actual_subjects
-    extra_subjects: set[str] = actual_subjects - expected_subjects
+    missing_subjects = expected_subjects - actual_subjects
+    extra_subjects = actual_subjects - expected_subjects
 
-    print("=== DATASET CHECK REPORT ===")
+    logger.info("=== DATASET CHECK REPORT ===")
 
     if missing_subjects:
-        print("\nMissing subject directories:")
+        logger.info("\nMissing subject directories:")
         for s in sorted(missing_subjects):
-            print(f"  - {s}")
+            logger.info("  - %s", s)
 
     if extra_subjects:
-        print("\nUnexpected subject directories:")
+        logger.info("\nUnexpected subject directories:")
         for s in sorted(extra_subjects):
-            print(f"  - {s}")
+            logger.info("  - %s", s)
 
     for subject_id in SUBJECT_IDS:
-        subject_dir: str = os.path.join(root_dir, subject_id)
-        if pathlib.Path(subject_dir).is_dir():
+        subject_dir = root_dir / subject_id
+        if subject_dir.is_dir():
             check_subject(subject_dir, subject_id)
 
-    print("\n=== CHECK COMPLETE ===")
+    logger.info("\n=== CHECK COMPLETE ===")
 
 
 # -------------------------

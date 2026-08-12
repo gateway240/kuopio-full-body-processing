@@ -1,7 +1,6 @@
 import argparse
 import logging
-import os
-import pathlib
+from pathlib import Path
 
 import pandas as pd
 
@@ -27,11 +26,11 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-input_csv = args.input_csv
+input_csv = Path(args.input_csv)
 output_file = "latex-trial-info.txt"
-output_dir = args.output_dir
-input_file = os.path.join(args.input_dir, input_csv)
-output_path = os.path.join(output_dir, output_file)
+output_dir = Path(args.output_dir)
+input_file = args.input_dir / input_csv
+output_path = output_dir / output_file
 
 
 df = pd.read_csv(input_file)
@@ -50,7 +49,7 @@ rename_map = {
 }
 num_participants = len(df)
 
-df.drop("description", axis=1, inplace=True)
+df = df.drop("description", axis=1)
 df["label"] = df["label"].map(lambda x: f"\\progfunc{{{x}}}")
 df["fp_l"] = df["fp_l"].map(lambda x: "-" if x == 0 else x)
 df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
@@ -65,5 +64,5 @@ latex_output = df.to_latex(
     escape=False,
     float_format="%d",
 )
-print(latex_output)
-pathlib.Path(output_path).write_text(latex_output, newline="")
+logger.info(latex_output)
+output_path.write_text(latex_output, newline="")

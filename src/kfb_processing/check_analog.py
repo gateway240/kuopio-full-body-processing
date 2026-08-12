@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import argparse
-import os
+import logging
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.signal import butter, filtfilt
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # max_workers: The maximum number of processes that can be used to
 #     execute the given calls. If None or not given then as many
@@ -74,8 +80,8 @@ KNOWN_TRIALS = {
 
 
 def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
-    print("Starting on: ", file_path)
-    with Path(file_path).open("r") as file:
+    logger.info("Starting on: %s", file_path)
+    with Path(file_path).open("r", encoding="utf-8") as file:
         # Skip header
         for line in file:
             if line.strip() == "endheader":
@@ -101,20 +107,21 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
 
         # Parse column into array
         arr = np.vstack(
-            df[col].astype(str).apply(lambda x: np.fromstring(x, sep=",")).values,
+            [np.fromstring(str(x), sep=",") for x in df[col]],
         )
-        if arr.shape[1] == 3:
+        if arr.shape[1] == 3:  # ruff: ignore[magic-value-comparison]
             # Create new columns
             new_cols[f"{col}_x"] = arr[:, 0]
             new_cols[f"{col}_y"] = arr[:, 1]
             new_cols[f"{col}_z"] = arr[:, 2]
-        elif arr.shape[1] == 4:
+        elif arr.shape[1] == 4:  # ruff: ignore[magic-value-comparison]
             new_cols[f"{col}_w"] = arr[:, 0]
             new_cols[f"{col}_x"] = arr[:, 1]
             new_cols[f"{col}_y"] = arr[:, 2]
             new_cols[f"{col}_z"] = arr[:, 3]
         else:
-            raise ValueError(f"Column {col}: unknown column shape {arr.shape}")
+            msg = f"Column {col}: unknown column shape {arr.shape}"
+            raise ValueError(msg)
         cols_to_drop.append(col)
 
     # Replace columns
@@ -128,41 +135,29 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
 # ---------------------------
 # 1. PAIR FILES BY TRIAL
 # ---------------------------
-def filter_motion_trials(trials: dict, known_trials: set):
-    """
-    Filters collected motion trials to only include known trial names.
-
-    Args:
-        trials: output of collect_motion_files()
-        known_trials: list of allowed trial names
-
-    Returns:
-        filtered dict with only matching trials
-    """
-
-    known_set = set(known_trials)  # ensure fast lookup
-
-    filtered = {key: data for key, data in trials.items() if key[1] in known_set}
-
-    return filtered
+def filter_motion_trials(
+    trials: dict[tuple[Path, str], dict[str, Path]],
+    known_trials: set[str],
+) -> dict[tuple[Path, str], dict[str, Path]]:
+    return {key: data for key, data in trials.items() if key[1] in known_trials}
 
 
-def collect_motion_files(root_dir: str):
+def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
     trials = {}
 
-    for participant in os.listdir(root_dir):
-        imu_dir = os.path.join(root_dir, participant, "imu")
-        mocap_dir = os.path.join(root_dir, participant, "mocap")
-        print("IMU dir: ", imu_dir, " Mocap dir: ", mocap_dir)
+    for participant in Path.iterdir(root_dir):
+        imu_dir = root_dir / participant / "imu"
+        mocap_dir = root_dir / participant / "mocap"
+        logger.info("IMU dir: %s Mocap dir: %s", imu_dir, mocap_dir)
         if not Path(imu_dir).is_dir() or not Path(mocap_dir).is_dir():
-            print("ERROR in dir!")
+            logger.info("ERROR in dir!")
             continue
 
         # index mocap
         analog_files = {
-            f.replace("_analog.sto", ""): os.path.join(mocap_dir, f)
-            for f in os.listdir(mocap_dir)
-            if f.endswith("_analog.sto")
+            f.name.replace("_analog.sto", ""): mocap_dir / f
+            for f in Path.iterdir(mocap_dir)
+            if f.name.endswith("_analog.sto")
         }
 
         # match
@@ -172,7 +167,7 @@ def collect_motion_files(root_dir: str):
                 "participant": participant,
                 "analog": path,
             }
-    # print(trials)
+    # logger.info(trials)
     return trials
 
 
@@ -187,16 +182,18 @@ def butter_bandpass_filter(
     highcut: float = 500.0,
     order: int = 4,
 ) -> pd.DataFrame:
-    if len(data) < 2:
-        raise ValueError("Not enough samples to compute sampling rate")
+    if len(data) < 2:  # ruff: ignore[magic-value-comparison]
+        msg = "Not enough samples to compute sampling rate"
+        raise ValueError(msg)
 
     sampling_rate = ANALOG_FS
-    # print(f"Sampling rate: {sampling_rate:.2f} Hz")
+    # logger.info(f"Sampling rate: {sampling_rate:.2f} Hz")
 
     nyquist = sampling_rate / 2
 
     if highcut >= nyquist:
-        raise ValueError(f"highcut ({highcut}) must be < Nyquist ({nyquist})")
+        msg_0 = f"highcut ({highcut}) must be < Nyquist ({nyquist})"
+        raise ValueError(msg_0)
 
     low = lowcut / nyquist
     high = highcut / nyquist
@@ -225,11 +222,12 @@ def butter_bandpass_filter(
 # ---------------------------
 
 
-def compute_snr(signal, baseline_len, window_size, step=200):
+def compute_snr(signal: np.ndarray, baseline_len: int, window_size: int, step: int = 200) -> tuple[float, int]:
     signal = np.asarray(signal)
 
     if len(signal) < baseline_len:
-        raise ValueError("Signal shorter than baseline length")
+        msg = "Signal shorter than baseline length"
+        raise ValueError(msg)
 
     # ---- BASELINE (NOISE) ----
     baseline = signal[:baseline_len]
@@ -254,18 +252,18 @@ def compute_snr(signal, baseline_len, window_size, step=200):
     signal_power = max_power
 
     # ---- SNR ----
-    snr = 10 * np.log10(signal_power / noise_power)
+    snr: float = 10 * np.log10(signal_power / noise_power)
 
     return snr, best_start
 
 
-def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, save_path):
+def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, save_path) -> None:  # ruff: ignore[missing-type-function-argument, too-many-arguments, too-many-positional-arguments]
     n_cols = len(df.columns)
     fig, axs = plt.subplots(n_cols, 1, figsize=(12, 3 * n_cols), squeeze=False)
 
     for i, col in enumerate(sorted(df.columns)):
         ax = axs[i, 0]
-        signal = df[col].values
+        signal = df[col].to_numpy()
 
         ax.plot(signal, label=col)
 
@@ -287,102 +285,85 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
     plt.savefig(save_path, dpi=300)
     plt.close(fig)
 
-    print(f"Saved EMG plot to: {save_path}")
+    logger.info("Saved EMG plot to: %s", save_path)
 
 
-def _process_single_trial(args):
-    participant, trial_name, info = args
+def _process_single_trial(participant: str, trial_name: str, info: Any) -> dict[str, Any]:  # ruff: ignore[any-type]
 
-    result = {}
-    try:
-        analog = _read_file_without_header(Path(info["analog"]))
+    analog = _read_file_without_header(Path(info["analog"]))
 
-        # ---- CHECK REQUIRED COLUMNS ----
-        missing = EMG_SENSORS - set(analog.columns)
-        if missing:
-            print(f"Missing required EMG columns: {missing}")
+    # ---- CHECK REQUIRED COLUMNS ----
+    missing = EMG_SENSORS - set(analog.columns)
+    if missing:
+        logger.info("Missing required EMG columns: %s", missing)
 
-        # Keep only EMG columns
-        emg_df = analog[[col for col in EMG_SENSORS if col in analog.columns]]
-        # ---- APPLY BANDPASS FILTER ----
-        # https://wiki.has-motion.com/doku.php?id=visual3d:tutorials:emg:typical_emg_processing
-        emg_df_filtered = butter_bandpass_filter(
-            emg_df,
-            lowcut=50,
-            highcut=500,
-            order=4,
-        )
-        result = {
-            "participant": participant,
-            "trial_name": trial_name,
-            "raw_analog": emg_df,
-            "filtered_analog": emg_df_filtered,
-            "missing": missing,
-        }
-
-    except Exception as e:
-        print("ERROR: ", info, e)
-
-    return result
+    # Keep only EMG columns
+    emg_df = analog[[col for col in EMG_SENSORS if col in analog.columns]]
+    # ---- APPLY BANDPASS FILTER ----
+    # https://wiki.has-motion.com/doku.php?id=visual3d:tutorials:emg:typical_emg_processing
+    emg_df_filtered = butter_bandpass_filter(
+        emg_df,
+        lowcut=50,
+        highcut=500,
+        order=4,
+    )
+    return {
+        "participant": participant,
+        "trial_name": trial_name,
+        "raw_analog": emg_df,
+        "filtered_analog": emg_df_filtered,
+        "missing": missing,
+    }
 
 
-def _calculate_single_trial(args):
-    info, output_dir = args
+def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # ruff: ignore[any-type]
     snr_dict = {}
 
     participant = info["participant"]
     trial_name = info["trial_name"]
     emg_df = info["filtered_analog"]
     missing = info["missing"]
-    try:
-        # ---- COMPUTE SNR ----
-        best_windows = {}
+    # ---- COMPUTE SNR ----
+    best_windows = {}
 
-        baseline_size = WINDOW_SIZE
-        window_size = WINDOW_SIZE
-        for col in emg_df.columns:
-            snr, best_start = compute_snr(
-                emg_df[col].values,
-                baseline_size,
-                window_size,
-            )
-            snr_dict[col] = snr
-            best_windows[col] = best_start
+    baseline_size = WINDOW_SIZE
+    window_size = WINDOW_SIZE
+    for col in emg_df.columns:
+        snr, best_start = compute_snr(
+            emg_df[col].values,
+            baseline_size,
+            window_size,
+        )
+        snr_dict[col] = snr
+        best_windows[col] = best_start
 
-        if PLOT_RESULTS:
-            save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
-            plot_emg_signals(
-                emg_df,
-                snr_dict,
-                best_windows,
-                baseline_size,
-                window_size,
-                save_path,
-            )
+    if PLOT_RESULTS:
+        save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
+        plot_emg_signals(
+            emg_df,
+            snr_dict,
+            best_windows,
+            baseline_size,
+            window_size,
+            save_path,
+        )
 
-    except Exception as e:
-        print("ERROR: ", info, e)
-
-    result = {
+    return {
         "participant": participant,
         "trial": trial_name,
         **snr_dict,
         "missing": missing,
     }
 
-    return result
-
 
 # ---------------------------
 # 5. PIPELINE
 # ---------------------------
 def process_motion_files(
-    motions: dict,
+    motions: dict[tuple[Path, str], dict[str, Path]],
     output_dir: Path,
-):
-    tasks_stage1 = [
-        (participant, trial, info) for (participant, trial), info in motions.items()
-    ]
+) -> pd.DataFrame:
+    tasks_stage1 = [(participant, trial, info) for (participant, trial), info in motions.items()]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
         try:
@@ -390,7 +371,7 @@ def process_motion_files(
             tasks_stage2 = [(info, output_dir) for info in results_stage1]
             results = list(executor.map(_calculate_single_trial, tasks_stage2))
         except KeyboardInterrupt:
-            print("Interrupted")
+            logger.info("Interrupted")
             executor.shutdown(cancel_futures=True)
             raise
 
@@ -421,8 +402,8 @@ def main() -> None:
     args = parser.parse_args()
     output_dir = Path(args.output_dir)
     Path.mkdir(output_dir, parents=True, exist_ok=True)
-    motions_raw = collect_motion_files(args.source_dir)
-    print(motions_raw)
+    motions_raw = collect_motion_files(Path(args.source_dir))
+    logger.info(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
     summary_df = process_motion_files(motions, output_dir)
     summary_df = summary_df.sort_values(["participant", "trial"])
@@ -433,15 +414,15 @@ def main() -> None:
     # fill NaN only in numeric columns
     numeric_cols = summary_df.select_dtypes(include="number").columns
     summary_df[numeric_cols] = summary_df[numeric_cols].fillna(0)
-    print(summary_df)
+    logger.info(summary_df)
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
-    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(
+    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{x:02d}")}).to_csv(
         output_file,
         index=False,
     )
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

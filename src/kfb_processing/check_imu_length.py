@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import argparse
-import os
-import pathlib
+import logging
 from collections import defaultdict
+from pathlib import Path
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
-def read_data_lines(filepath: str) -> tuple[list[str], list[str]]:
+def read_data_lines(filepath: Path) -> tuple[list[str], list[str]]:
     header_lines = []
     data_lines = []
-    # print(filepath)
-    with pathlib.Path(filepath).open("r", encoding="utf-8") as f:
+    # logger.info(filepath)
+    with filepath.open("r", encoding="utf-8") as f:
         for line in f:
-            # print(line)
+            # logger.info(line)
             stripped = line.strip()
             if not stripped:
                 continue
@@ -30,24 +34,24 @@ def get_last_packet_counter(data_lines: list[str]) -> int:
 
 
 def collect_motion_files(
-    root_dir: str,
-) -> defaultdict[tuple[str, str], list[str]]:
+    root_dir: Path,
+) -> dict[tuple[Path, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
+    motions: defaultdict[tuple[Path, str], list[Path]] = defaultdict()
 
-    for participant in os.listdir(root_dir):
-        imu_dir: str = os.path.join(root_dir, participant, "imu")
-        if not pathlib.Path(imu_dir).is_dir():
+    for participant in Path.iterdir(root_dir):
+        imu_dir = root_dir / participant / "imu"
+        if not imu_dir.is_dir():
             continue
 
-        for fname in os.listdir(imu_dir):
-            if not fname.endswith(".txt"):
+        for fname in Path.iterdir(imu_dir):
+            if not fname.name.endswith(".txt"):
                 continue
 
-            motion = fname.rsplit("-", 1)[0]
-            path = os.path.join(imu_dir, fname)
+            motion = fname.name.rsplit("-", 1)[0]
+            path = imu_dir / fname
             motions[participant, motion].append(path)
 
     return motions
@@ -66,50 +70,49 @@ def trim_data_by_packet(
 
 
 def process_motion_files(
-    motions: dict[tuple[str, str], list[str]],
-    dry_run: bool = True,
+    motions: dict[tuple[Path, str], list[Path]],
+    dry_run: bool = True,  # ruff: ignore[boolean-default-value-positional-argument, boolean-type-hint-positional-argument]
 ) -> int:
     processed_files = 0
     for (participant, motion), files in motions.items():
-        file_data: dict[str, tuple[list[str], list[str]]] = {}
+        file_data: dict[Path, tuple[list[str], list[str]]] = {}
 
         for f in files:
             header, data = read_data_lines(f)
             file_data[f] = (header, data)
-            # print(f)
-            # print(header)
-            # print()
+            # logger.info(f)
+            # logger.info(header)
+            # logger.info()
 
         # Get last packet counter per file
-        last_packets: dict[str, int] = {
-            f: get_last_packet_counter(data) for f, (_, data) in file_data.items()
-        }
-
+        last_packets: dict[Path, int] = {f: get_last_packet_counter(data) for f, (_, data) in file_data.items()}
         # Skip already aligned
         if len(set(last_packets.values())) == 1:
             continue
 
-        print(f"\nParticipant {participant}, motion '{motion}' has mismatched lengths:")
+        logger.info("Participant %s, motion '%s' has mismatched lengths:", participant, motion)
         # for f, l in last_packets.items():
-        #     print(f"  {os.path.basename(f)}: {l} lines")
+        #     logger.info(f"  {os.path.basename(f)}: {l} lines")
 
-        shortest_file: str = min(last_packets, key=lambda f: last_packets[f])
-        shortest_data: list[str] = file_data[shortest_file][1]
+        shortest_file = min(last_packets, key=last_packets.__getitem__)
+        shortest_data = file_data[shortest_file][1]
         last_packet: int = get_last_packet_counter(shortest_data)
 
-        print(f"  → Shortest file: {os.path.basename(shortest_file)}")
-        print(f"  → Last PacketCounter: {last_packet}")
+        logger.info("  → Shortest file: %s ", shortest_file.name)
+        logger.info("  → Last PacketCounter: %s", last_packet)
 
         for f, (header, data) in file_data.items():
             trimmed_lines = trim_data_by_packet(header, data, last_packet)
 
             if not dry_run:
-                with pathlib.Path(f).open("w") as out:
+                with f.open("w") as out:
                     out.writelines(trimmed_lines)
 
-            print(
-                f"  {os.path.basename(f)}: "
-                f"{len(data) + len(header)} → {len(trimmed_lines)} lines",
+            logger.info(
+                "  %s: %d → %d lines",
+                f.name,
+                len(data) + len(header),
+                len(trimmed_lines),
             )
         processed_files += 1
     return processed_files
@@ -132,7 +135,7 @@ def main() -> None:
 
     motions = collect_motion_files(args.source_dir)
     processed_files = process_motion_files(motions, args.dry_run)
-    print(f"\nDone. Processed: {processed_files} files!")
+    logger.info("Done. Processed: %d files!", processed_files)
 
 
 if __name__ == "__main__":

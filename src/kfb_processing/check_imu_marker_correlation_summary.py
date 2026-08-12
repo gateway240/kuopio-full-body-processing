@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import pathlib
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import pandas as pd
+
+if TYPE_CHECKING:
+    from pandas.io.formats.style_render import ExtFormatter
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 PLOT_RESULTS = False
 
@@ -81,10 +91,10 @@ def main() -> None:
         .agg(
             corr_mean=("best_corr", "mean"),
             corr_std=("best_corr", "std"),
-            corr_range=("best_corr", lambda x: f"{x.min():.2f} – {x.max():.2f}"),
+            corr_range=("best_corr", lambda x: f"{x.min():.2f} – {x.max():.2f}"),  # ruff: ignore[ambiguous-unicode-character-string]
             lag_mean=("best_lag", "mean"),
             lag_std=("best_lag", "std"),
-            lag_range=("best_lag", lambda x: f"{x.min():.0f} – {x.max():.0f}"),
+            lag_range=("best_lag", lambda x: f"{x.min():.0f} – {x.max():.0f}"),  # ruff: ignore[ambiguous-unicode-character-string]
         )
         .reset_index()
     )
@@ -109,13 +119,9 @@ def main() -> None:
 
     summary_stats = summary_stats.rename(columns=rename_map)
 
-    fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
+    fmt: ExtFormatter = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
     fmt.update(
-        {
-            col: "{:.2f}"
-            for col in summary_stats.columns[1:]
-            if pd.api.types.is_numeric_dtype(summary_stats[col])
-        },
+        {col: "{:.2f}" for col in summary_stats.columns[1:] if pd.api.types.is_numeric_dtype(summary_stats[col])},
     )
 
     latex = (
@@ -124,10 +130,12 @@ def main() -> None:
         .hide(axis="index")
         .to_latex(
             caption=(
-                r"Optical Marker IMU sensor temporal alignment (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+                "Optical Marker IMU sensor temporal alignment "
+                r" (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "The correlation values are unitless and bounded from 0 to 1. "
                 "The lag values are represented as frames from perfect alignment. "
-                "The 8 marker sensor pairs with the highest correlation are selected for each trial to create the summary statistics. "
+                "The 8 marker sensor pairs with the highest correlation are selected "
+                "for each trial to create the summary statistics. "
                 "Further details for each individual trail can be found in ``imu-marker-sync.csv'' "
             ),
             label="tab:imu_marker_correlation_per_participant",
@@ -136,11 +144,11 @@ def main() -> None:
         )
     )
 
-    print(latex)
+    logger.info(latex)
     output_file_latex = output_dir_latex / "imu-marker-correlation-per-participant.txt"
-    Path(output_file_latex).write_text(latex, newline="")
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

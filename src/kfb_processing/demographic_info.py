@@ -1,9 +1,14 @@
 import argparse
-import os
-import pathlib
+import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 parser = argparse.ArgumentParser(description="Process data.")
 parser.add_argument(
@@ -23,13 +28,13 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-input_csv = args.input_csv
+input_csv = Path(args.input_csv)
 output_demographic_file = "latex-demographics.txt"
 output_dimensions_file = "latex-dimensions.txt"
-output_dir = args.output_dir
-input_file = os.path.join(args.input_dir, input_csv)
-output_demographic = os.path.join(output_dir, output_demographic_file)
-output_dimensions = os.path.join(output_dir, output_dimensions_file)
+output_dir = Path(args.output_dir)
+input_file = args.input_dir / input_csv
+output_demographic = output_dir / output_demographic_file
+output_dimensions = output_dir / output_dimensions_file
 
 
 df = pd.read_csv(input_file)
@@ -40,7 +45,7 @@ numeric_df = df.select_dtypes(include=[np.number]).drop(columns=["id"], errors="
 def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
-    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")
+    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")  # ruff: ignore[ambiguous-unicode-character-string]
     return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
 
 
@@ -61,13 +66,14 @@ summary_basic = summary_table(
 
 latex_demographics = summary_basic.to_latex(
     index=True,
-    caption=rf"Demographic summary (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) of the participants (N = {num_participants}) in the dataset",
+    caption=r"Demographic summary (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) of the participants "
+    f"(N = {num_participants}) in the dataset",
     label="tab:anthro_basic",
     escape=False,
     float_format="%.1f",
 )
-print(latex_demographics)
-pathlib.Path(output_demographic).write_text(latex_demographics, newline="")
+logger.info(latex_demographics)
+output_demographic.write_text(latex_demographics, newline="")
 
 
 cols_custom = [
@@ -154,6 +160,6 @@ latex_dimensions = summary_transposed.to_latex(
     float_format="%.1f",
 )
 
-print(latex_dimensions)
+logger.info(latex_dimensions)
 
-pathlib.Path(output_dimensions).write_text(latex_dimensions, newline="")
+output_dimensions.write_text(latex_dimensions, newline="")
