@@ -1,13 +1,13 @@
 {
-    "python.defaultInterpreterPath": ".venv/bin/python",
-    "cSpell.enabled": true,
-    "C_Cpp.intelliSenseEngine": "disabled",
-    "clangd.path": "./opensim-cpp/clangd-wrapper.sh",
-    "clangd.checkUpdates": true,
-    "clangd.arguments": [
-        "-log=verbose",
-        "-pretty",
-        "--background-index",
-        "--compile-commands-dir=./opensim-cpp/build"
-    ]
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "cSpell.enabled": true,
+  "clangd.arguments": [
+    "-log=verbose",
+    "-pretty",
+    "--background-index",
+    "--compile-commands-dir=./opensim-cpp/build"
+  ],
+  "clangd.checkUpdates": true,
+  "clangd.path": "./opensim-cpp/clangd-wrapper.sh",
+  "python.defaultInterpreterPath": ".venv/bin/python"
 }
