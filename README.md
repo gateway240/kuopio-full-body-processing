@@ -83,7 +83,7 @@ python src/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_dir $OUTPUT_PATH
 
 ```bash
 python src/dir_to_graph.py $OUTPUT_PATH -o images/dataset_graph.d2 --font-size 54
-d2 images/dataset_graph.d2 images/dataset_graph.png 
+d2 images/dataset_graph.d2 images/dataset_graph.png
 ```
 
 ## Zip result
@@ -96,4 +96,3 @@ cd $OUTPUT_PATH
 
 7z a -tzip -mmt=on kuopio-full-body-dataset.zip ./kuopio-full-body-dataset/
 ```
-

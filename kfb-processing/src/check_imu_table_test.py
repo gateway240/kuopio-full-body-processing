@@ -1,10 +1,10 @@
 from __future__ import annotations
-import pathlib
 
 import argparse
 import os
+import pathlib
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 from typing import DefaultDict, Dict, List, Tuple
 

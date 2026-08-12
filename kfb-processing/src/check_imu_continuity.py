@@ -186,8 +186,7 @@ def main() -> None:
         lambda x: "" if isinstance(x, list) and len(x) == 0 else x
     )
     summary_df = (
-        summary_df
-        .sort_values(["participant", "trial"])
+        summary_df.sort_values(["participant", "trial"])
         .groupby(["participant", "trial"], as_index=False)
         .first()
     )

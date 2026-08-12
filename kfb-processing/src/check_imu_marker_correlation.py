@@ -527,12 +527,11 @@ def _calculate_single_trial(args):
 
 
 def _process_single_trial(args):
-    participant, trial_name, info= args
+    participant, trial_name, info = args
     try:
         trc = read_opensim_marker_file(Path(info["trc"]), skip=3, index_col=1)
         sto_accel = _read_imu_file_without_header(Path(info["sto_acceleration"]))
         sto_ori = _read_imu_file_without_header(Path(info["sto_orientation"]))
-
 
         trc_filtered = butter_lowpass_filter(
             trc, cutoff=CUTOFF, sampling_rate=TRC_FS, order=4
@@ -554,7 +553,7 @@ def _process_single_trial(args):
         "raw_sto_accel": sto_accel,
         "raw_sto_ori": sto_ori,
         "filtered_trc": trc_filtered,
-        "filtered_sto_accel" : sto_accel,
+        "filtered_sto_accel": sto_accel,
         "filtered_sto_ori": sto_ori,
     }
 
@@ -567,8 +566,7 @@ def process_motion_files(
     output_dir: Path,
 ):
     tasks_stage1 = [
-        (participant, trial, info)
-        for (participant, trial), info in motions.items()
+        (participant, trial, info) for (participant, trial), info in motions.items()
     ]
 
     with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
@@ -576,7 +574,7 @@ def process_motion_files(
             results_stage1 = list(executor.map(_process_single_trial, tasks_stage1))
             tasks_stage2 = [
                 (info, output_dir, marker_name, imu_name)
-                for  info in results_stage1
+                for info in results_stage1
                 for (marker_name, imu_name) in MARKER_PAIRS
             ]
             results = list(executor.map(_calculate_single_trial, tasks_stage2))

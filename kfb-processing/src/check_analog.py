@@ -219,6 +219,7 @@ def butter_bandpass_filter(
 
     return filtered_df
 
+
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING
 # ---------------------------
@@ -313,7 +314,7 @@ def _process_single_trial(args):
             "trial_name": trial_name,
             "raw_analog": emg_df,
             "filtered_analog": emg_df_filtered,
-            "missing": missing
+            "missing": missing,
         }
 
     except Exception as e:
@@ -423,9 +424,9 @@ def main() -> None:
     print(summary_df)
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
-    summary_df.assign(
-        **{col: summary_df[col].map(lambda x: f"{int(x):02d}")}
-    ).to_csv(output_file, index=False)
+    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(
+        output_file, index=False
+    )
 
     print(f"\nDone. Processed: {len(summary_df)} trials!")
 

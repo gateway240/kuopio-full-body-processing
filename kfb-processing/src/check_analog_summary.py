@@ -98,9 +98,9 @@ def main() -> None:
     output_dir_latex = pathlib.Path("out")
     output_file = output_dir_latex / "emg-snr-per-participant.csv"
     col = summary_stats.columns[0]
-    summary_stats.assign(
-        **{col: summary_stats[col].map(lambda x: f"{x:02d}")}
-    ).to_csv(output_file, index=False)
+    summary_stats.assign(**{col: summary_stats[col].map(lambda x: f"{x:02d}")}).to_csv(
+        output_file, index=False
+    )
 
     rename_map = {
         "participant": "\#",
@@ -112,12 +112,14 @@ def main() -> None:
     summary_stats = summary_stats.rename(columns=rename_map)
 
     fmt = {summary_stats.columns[0]: "{:02d}"}  # first column as integer
-    fmt.update({
-        col: "{:.2f}"
-        for col in summary_stats.columns[1:]
-        if pd.api.types.is_numeric_dtype(summary_stats[col])
-    })
-    
+    fmt.update(
+        {
+            col: "{:.2f}"
+            for col in summary_stats.columns[1:]
+            if pd.api.types.is_numeric_dtype(summary_stats[col])
+        }
+    )
+
     latex = (
         summary_stats.style.format(fmt)
         .hide(axis="index")

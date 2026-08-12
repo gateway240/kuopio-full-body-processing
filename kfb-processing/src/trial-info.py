@@ -1,7 +1,6 @@
 import argparse
 import os
 
-import numpy as np
 import pandas as pd
 
 parser = argparse.ArgumentParser(description="Process data.")
@@ -41,12 +40,11 @@ rename_map = {
     "imu": "IMU",
     "emg": "EMG",
     "fp_l": "LF",
-    "fp_r": "RF"
-
+    "fp_r": "RF",
 }
 num_participants = len(df)
 
-df.drop("description",axis=1, inplace=True)
+df.drop("description", axis=1, inplace=True)
 df["label"] = df["label"].map(lambda x: f"\\progfunc{{{x}}}")
 df["fp_l"] = df["fp_l"].map(lambda x: "-" if x == 0 else x)
 df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
@@ -64,4 +62,3 @@ latex_output = df.to_latex(
 print(latex_output)
 with open(output_path, "w", newline="") as csvfile:
     csvfile.write(latex_output)
-
