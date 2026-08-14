@@ -1,0 +1,13 @@
+logs/
+.git
+*.md
+.cache
+.vscode
+
+# Python code not needed in image
+src
+# data used only by Python
+data
+out
+# Don't want host build files to carry to the container
+**/build/

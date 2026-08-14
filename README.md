@@ -97,3 +97,12 @@ cd $OUTPUT_PATH
 
 7z a -tzip -mmt=on kuopio-full-body-dataset.zip ./kuopio-full-body-dataset/
 ```
+
+## Docker
+
+```
+docker build . -t kfb-opensim-cpp
+
+docker run -it kfb-opensim-cpp
+
+```
