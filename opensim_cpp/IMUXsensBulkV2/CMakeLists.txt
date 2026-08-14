@@ -12,6 +12,7 @@ SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -march=native")
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find and hook up to OpenSim.
 # ----------------------------
+set(OpenSim_DIR "~/opensim-core/cmake")
 find_package(OpenSim REQUIRED PATHS "${OPENSIM_INSTALL_DIR}")
 
 # Configure this project.
