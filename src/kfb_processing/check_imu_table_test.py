@@ -46,7 +46,7 @@ def collect_motion_files(
     """
     motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
 
-    for participant in Path.iterdir(root_dir):
+    for participant in root_dir.iterdir():
         directory = root_dir / participant / "imu"
         if not directory.is_dir():
             continue

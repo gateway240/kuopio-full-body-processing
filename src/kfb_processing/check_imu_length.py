@@ -35,23 +35,24 @@ def get_last_packet_counter(data_lines: list[str]) -> int:
 
 def collect_motion_files(
     root_dir: Path,
-) -> dict[tuple[Path, str], list[Path]]:
+) -> dict[tuple[str, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: defaultdict[tuple[Path, str], list[Path]] = defaultdict()
+    motions: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
 
-    for participant in Path.iterdir(root_dir):
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         imu_dir = root_dir / participant / "imu"
         if not imu_dir.is_dir():
             continue
 
-        for fname in Path.iterdir(imu_dir):
+        for fname in imu_dir.iterdir():
             if not fname.name.endswith(".txt"):
                 continue
 
             motion = fname.name.rsplit("-", 1)[0]
-            path = imu_dir / fname
+            path = imu_dir / fname.name
             motions[participant, motion].append(path)
 
     return motions
@@ -70,7 +71,7 @@ def trim_data_by_packet(
 
 
 def process_motion_files(
-    motions: dict[tuple[Path, str], list[Path]],
+    motions: dict[tuple[str, str], list[Path]],
     dry_run: bool = True,  # ruff: ignore[boolean-default-value-positional-argument, boolean-type-hint-positional-argument]
 ) -> int:
     processed_files = 0
@@ -135,7 +136,7 @@ def main() -> None:
 
     motions = collect_motion_files(args.source_dir)
     processed_files = process_motion_files(motions, args.dry_run)
-    logger.info("Done. Processed: %d files!", processed_files)
+    logger.info("Done. Found %d files requiring processing!", processed_files)
 
 
 if __name__ == "__main__":

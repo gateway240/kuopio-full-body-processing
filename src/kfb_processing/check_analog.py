@@ -145,7 +145,7 @@ def filter_motion_trials(
 def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
     trials = {}
 
-    for participant in Path.iterdir(root_dir):
+    for participant in root_dir.iterdir():
         imu_dir = root_dir / participant / "imu"
         mocap_dir = root_dir / participant / "mocap"
         logger.info("IMU dir: %s Mocap dir: %s", imu_dir, mocap_dir)

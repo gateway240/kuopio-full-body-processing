@@ -208,7 +208,7 @@ def is_versioned_trial(filename: str, suffix: str) -> bool:
 def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
     trials = {}
 
-    for participant in Path.iterdir(root_dir):
+    for participant in root_dir.iterdir():
         imu_dir = root_dir / participant / "imu"
         mocap_dir = root_dir / participant / "mocap"
         logger.info("IMU dir: %s Mocap dir: %s", imu_dir, mocap_dir)
@@ -225,12 +225,12 @@ def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Pat
         # index imu
         sto_acceleration_files = {
             f.name.replace("_accelerations.sto", ""): imu_dir / f
-            for f in Path.iterdir(imu_dir)
+            for f in imu_dir.iterdir()
             if f.name.endswith("_accelerations.sto")
         }
         sto_orientation_files = {
             f.name.replace("_orientations.sto", ""): imu_dir / f
-            for f in Path.iterdir(imu_dir)
+            for f in imu_dir.iterdir()
             if f.name.endswith("_orientations.sto")
         }
 

@@ -1,6 +1,5 @@
 import argparse
 import logging
-import pathlib
 from pathlib import Path
 
 # Logging
@@ -62,18 +61,17 @@ def expected_files(labels: list[str], suffixes: list[str]) -> set[str]:
 def check_folder(
     folder_path: Path,
     expected: set[str],
-) -> tuple[set[str], set[Path], bool]:
+) -> tuple[set[str], set[str], bool]:
     """
     Returns:
         missing files,
         extra files,
         whether the folder itself is missing
     """
-    if not pathlib.Path(folder_path).is_dir():
+    if not folder_path.is_dir():
         return expected, set(), True
 
-    actual = {f for f in Path.iterdir(folder_path) if (folder_path / f).is_file()}
-
+    actual = {f.name for f in Path.iterdir(folder_path) if (folder_path / f).is_file()}
     missing = expected - actual
     extra = actual - expected
 
@@ -140,10 +138,8 @@ def check_dataset(root_dir: Path) -> None:
         msg = f"Not a directory: {root_dir}"
         raise ValueError(msg)
 
-    actual_subjects = {d for d in Path.iterdir(root_dir) if (root_dir / d).is_dir()}
-
+    actual_subjects = {d.name for d in root_dir.iterdir() if (root_dir / d).is_dir()}
     expected_subjects = set(SUBJECT_IDS)
-
     missing_subjects = expected_subjects - actual_subjects
     extra_subjects = actual_subjects - expected_subjects
 
