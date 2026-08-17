@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
 
@@ -365,14 +365,15 @@ def process_motion_files(
 ) -> pd.DataFrame:
     tasks_stage1 = [(participant, trial, info) for (participant, trial), info in motions.items()]
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with Pool(processes=MAX_WORKERS) as executor:
         try:
-            results_stage1 = list(executor.map(_process_single_trial, tasks_stage1))
+            results_stage1 = executor.starmap(_process_single_trial, tasks_stage1)
             tasks_stage2 = [(info, output_dir) for info in results_stage1]
-            results = list(executor.map(_calculate_single_trial, tasks_stage2))
+            results = executor.starmap(_calculate_single_trial, tasks_stage2)
         except KeyboardInterrupt:
             logger.info("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            executor.terminate()
+            executor.join()
             raise
 
     return pd.DataFrame(results)
@@ -418,7 +419,7 @@ def main() -> None:
     logger.info(summary_df)
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
-    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{x:02d}")}).to_csv(
+    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(  # ty: ignore[invalid-argument-type]
         output_file,
         index=False,
     )

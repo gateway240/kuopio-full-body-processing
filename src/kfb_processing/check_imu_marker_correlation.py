@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
 
@@ -410,87 +410,89 @@ def _calculate_single_trial(info: dict[str, Any], output_dir: Path, marker_name:
     marker_nan_count = 0
     marker_nan_percent = 0
     marker_constant_percent = 0
+    try:  # ruff: ignore[too-many-statements-in-try-clause]
+        trc = info["raw_trc"]
+        # assume sampling rates known
 
-    trc = info["raw_trc"]
-    # assume sampling rates known
+        raw_trc = trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]]
+        marker_len = trc.size
+        marker_nan_count = np.isnan(raw_trc.values).sum()
+        marker_nan_percent = (marker_nan_count / marker_len) * 100 if marker_len else 0
 
-    raw_trc = trc[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]]
-    marker_len = trc.size
-    marker_nan_count = np.isnan(raw_trc.values).sum()
-    marker_nan_percent = (marker_nan_count / marker_len) * 100 if marker_len else 0
+        raw_coords = raw_trc.ffill().to_numpy()
 
-    raw_coords = raw_trc.ffill().to_numpy()
+        # calculate how much the marker data is constant during the trial
+        diff = np.linalg.norm(np.diff(raw_coords, axis=0), axis=1)
+        eps = 0.1  # mm
+        is_constant = diff < eps
+        marker_constant_percent = (np.sum(is_constant) / is_constant.size) * 100
+        logger.info("Constant percent: %f", marker_constant_percent)
 
-    # calculate how much the marker data is constant during the trial
-    diff = np.linalg.norm(np.diff(raw_coords, axis=0), axis=1)
-    eps = 0.1  # mm
-    is_constant = diff < eps
-    marker_constant_percent = (np.sum(is_constant) / is_constant.size) * 100
-    logger.info("Constant percent: %f", marker_constant_percent)
-
-    raw_coords_downsample = downsample_np(
-        raw_coords,
-        target_fs=IMU_FS,
-        current_fs=TRC_FS,
-    )
-
-    trc_filtered = info["filtered_trc"]
-    sto_accel = info["filtered_sto_accel"]
-    sto_ori = info["filtered_sto_ori"]
-
-    coords = trc_filtered[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]].to_numpy()
-    marker_signal_og = marker_acc_norm(coords, TRC_FS)
-    marker_signal = downsample_np(
-        marker_signal_og,
-        target_fs=IMU_FS,
-        current_fs=TRC_FS,
-    )
-    imu_signal = imu_acc_norm(sto_accel, sto_ori, imu_name)
-    n = min(len(marker_signal), len(imu_signal))
-    marker_signal = marker_signal[:n]
-    imu_signal = imu_signal[:n]
-
-    # align lengths
-    logger.info("Lengths: %d %d", len(marker_signal), len(imu_signal))
-    # Normalized cross correlation
-    logger.info("marker: %s", marker_signal.shape)
-    logger.info("imu: %s", imu_signal.shape)
-    x = marker_signal
-    y = imu_signal
-    # logger.info("x:", x.shape)
-    # logger.info("y:", y.shape)
-    corr = np.correlate(x, y, mode="full")
-
-    # MATLAB 'coeff' normalization
-    norm = np.sqrt(np.sum(x**2) * np.sum(y**2))
-    corr /= norm
-
-    # lag axis
-    lags = np.arange(-n + 1, n)
-    # best alignment
-    best_lag = lags[np.argmax(corr)]
-    best_corr = np.max(corr)
-    # corr = best_corr
-    logger.info("Best lag: %f", best_lag)
-    logger.info("Max correlation: %f", best_corr)
-
-    if PLOT_RESULTS:
-        coords_downsample = downsample_np(
-            coords,
+        raw_coords_downsample = downsample_np(
+            raw_coords,
             target_fs=IMU_FS,
             current_fs=TRC_FS,
         )
-        plot_correlation(
-            x,
-            y,
-            corr,
-            lags,
-            best_corr,
-            best_lag,
-            coords=coords_downsample[:n],
-            raw_coords=raw_coords_downsample[:n],
-            save_path=output_dir / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+
+        trc_filtered = info["filtered_trc"]
+        sto_accel = info["filtered_sto_accel"]
+        sto_ori = info["filtered_sto_ori"]
+
+        coords = trc_filtered[[f"{marker_name}_x", f"{marker_name}_y", f"{marker_name}_z"]].to_numpy()
+        marker_signal_og = marker_acc_norm(coords, TRC_FS)
+        marker_signal = downsample_np(
+            marker_signal_og,
+            target_fs=IMU_FS,
+            current_fs=TRC_FS,
         )
+        imu_signal = imu_acc_norm(sto_accel, sto_ori, imu_name)
+        n = min(len(marker_signal), len(imu_signal))
+        marker_signal = marker_signal[:n]
+        imu_signal = imu_signal[:n]
+
+        # align lengths
+        logger.info("Lengths: %d %d", len(marker_signal), len(imu_signal))
+        # Normalized cross correlation
+        logger.info("marker: %s", marker_signal.shape)
+        logger.info("imu: %s", imu_signal.shape)
+        x = marker_signal
+        y = imu_signal
+        # logger.info("x:", x.shape)
+        # logger.info("y:", y.shape)
+        corr = np.correlate(x, y, mode="full")
+
+        # MATLAB 'coeff' normalization
+        norm = np.sqrt(np.sum(x**2) * np.sum(y**2))
+        corr /= norm
+
+        # lag axis
+        lags = np.arange(-n + 1, n)
+        # best alignment
+        best_lag = lags[np.argmax(corr)]
+        best_corr = np.max(corr)
+        # corr = best_corr
+        logger.info("Best lag: %f", best_lag)
+        logger.info("Max correlation: %f", best_corr)
+
+        if PLOT_RESULTS:
+            coords_downsample = downsample_np(
+                coords,
+                target_fs=IMU_FS,
+                current_fs=TRC_FS,
+            )
+            plot_correlation(
+                x,
+                y,
+                corr,
+                lags,
+                best_corr,
+                best_lag,
+                coords=coords_downsample[:n],
+                raw_coords=raw_coords_downsample[:n],
+                save_path=output_dir / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+            )
+    except Exception:
+        logger.exception("ERROR: %s", info)
 
     return {
         "participant": participant,
@@ -551,18 +553,22 @@ def process_motion_files(
 ) -> pd.DataFrame:
     tasks_stage1 = [(participant, trial, info) for (participant, trial), info in motions.items()]
 
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with Pool(processes=MAX_WORKERS) as executor:
         try:
-            results_stage1 = list(executor.map(_process_single_trial, tasks_stage1))
+            results_stage1 = executor.starmap(
+                _process_single_trial,
+                tasks_stage1,
+            )
             tasks_stage2 = [
                 (info, output_dir, marker_name, imu_name)
                 for info in results_stage1
                 for (marker_name, imu_name) in MARKER_PAIRS
             ]
-            results = list(executor.map(_calculate_single_trial, tasks_stage2))
+            results = executor.starmap(_calculate_single_trial, tasks_stage2)
         except KeyboardInterrupt:
             logger.info("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            executor.terminate()
+            executor.join()
             raise
 
     return pd.DataFrame(results)
