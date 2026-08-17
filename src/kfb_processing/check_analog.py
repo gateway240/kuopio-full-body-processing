@@ -385,12 +385,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
@@ -400,9 +401,9 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
+    output_dir = args.output_dir
     Path.mkdir(output_dir, parents=True, exist_ok=True)
-    motions_raw = collect_motion_files(Path(args.source_dir))
+    motions_raw = collect_motion_files(args.source_dir)
     logger.info(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
     summary_df = process_motion_files(motions, output_dir)

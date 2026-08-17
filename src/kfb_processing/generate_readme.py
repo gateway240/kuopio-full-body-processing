@@ -263,6 +263,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
@@ -355,5 +356,5 @@ if __name__ == "__main__":
     logger.info("Valid Bag Markers: %s", generate_valid_markers([optical_bag_file]))
     logger.info("Valid Tote Markers: %s", generate_valid_markers([optical_tote_file]))
 
-    out_path = Path(args.output_dir) / "readme.txt"
+    out_path = args.output_dir / "readme.txt"
     readme.write(out_path)

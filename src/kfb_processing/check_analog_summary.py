@@ -55,12 +55,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
     )
     parser.add_argument(
@@ -70,7 +71,7 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
+    output_dir = args.output_dir
     Path.mkdir(output_dir, parents=True, exist_ok=True)
 
     input_file = output_dir / "emg-snr.csv"

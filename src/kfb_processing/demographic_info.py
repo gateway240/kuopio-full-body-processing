@@ -19,19 +19,21 @@ parser.add_argument(
 parser.add_argument(
     "--input_dir",
     default="out",
+    type=Path,
     help="Directory to save output CSV (default: current directory)",
 )
 parser.add_argument(
     "--output_dir",
     default="out",
+    type=Path,
     help="Directory to save output CSV (default: current directory)",
 )
 args = parser.parse_args()
 
-input_csv = Path(args.input_csv)
+input_csv = args.input_csv
 output_demographic_file = "latex-demographics.txt"
 output_dimensions_file = "latex-dimensions.txt"
-output_dir = Path(args.output_dir)
+output_dir = args.output_dir
 input_file = args.input_dir / input_csv
 output_demographic = output_dir / output_demographic_file
 output_dimensions = output_dir / output_dimensions_file

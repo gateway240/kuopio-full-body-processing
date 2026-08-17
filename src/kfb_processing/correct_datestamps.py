@@ -18,17 +18,19 @@ def main() -> None:
     parser.add_argument(
         "--input_dir",
         required=True,
+        type=Path,
         help="Input directory containing P### folders with files",
     )
     parser.add_argument(
         "--output_dir",
         required=True,
+        type=Path,
         help="Output directory containing files to update timestamps for",
     )
     args = parser.parse_args()
 
-    input_dir = Path(args.input_dir).expanduser()
-    output_dir = Path(args.output_dir).expanduser()
+    input_dir = args.input_dir.expanduser()
+    output_dir = args.output_dir.expanduser()
 
     if not input_dir.exists():
         msg = f"Input directory does not exist: {input_dir}"
