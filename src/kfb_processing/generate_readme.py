@@ -279,7 +279,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     doc_fmt = args.doc_fmt
-    config_dir = Path("measurement-config")
+    config_dir = Path("data") / "measurement-config"
     optical_participant_file = config_dir / "optical-marker-participant.csv"
     optical_bag_file = config_dir / "optical-marker-bag.csv"
     optical_tote_file = config_dir / "optical-marker-tote.csv"

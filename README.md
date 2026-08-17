@@ -163,10 +163,14 @@ python src/kfb_processing/check_analog.py $OUTPUT_PATH/s02_extracted/ --output_d
 ### Dataset readme generation
 
 ```py
-python src/kfb_processing/demographic-info.py --output_dir ./out --input_dir $OUTPUT_PATH
+python src/kfb_processing/demographic_info.py --output_dir ./out --input_dir $OUTPUT_PATH
 # This format works for the zenodo online preview
-python src/kfb_processing/generate-readme.py --output_dir $OUTPUT_PATH --table_fmt github
-python src/kfb_processing/generate-readme.py --output_dir out --doc_fmt html
+python src/kfb_processing/generate_readme.py --output_dir $OUTPUT_PATH --table_fmt github
+python src/kfb_processing/generate_readme.py --output_dir out --doc_fmt html
+
+python src/kfb_processing/trial_info.py --output_dir out --input_csv movements.csv --input_dir data/measurement-config
+
+python src/kfb_processing/emg_info.py --output_dir out --input_csv emg-sensor-mappings.csv --input_dir data/measurement-config
 ```
 
 ### Zip result
