@@ -3,7 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Pool
 from pathlib import Path
 from typing import Any
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def read_file(filepath: Path) -> pd.DataFrame:
-    with Path(filepath).open("r", encoding="utf-8") as f:
+    with filepath.open("r", encoding="utf-8") as f:
         lines = f.readlines()
 
     # Find the last non-empty line (this contains column names)
@@ -41,13 +41,14 @@ def read_file(filepath: Path) -> pd.DataFrame:
 
 def collect_motion_files(
     root_dir: Path,
-) -> dict[tuple[Path, str], list[Path]]:
+) -> dict[tuple[str, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: defaultdict[tuple[Path, str], list[Path]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
 
-    for participant in root_dir.iterdir():
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         directory = root_dir / participant / "imu"
         if not directory.is_dir():
             continue
@@ -57,7 +58,7 @@ def collect_motion_files(
                 continue
 
             motion = fname.name.rsplit("-", 1)[0]
-            path = directory / fname
+            path = directory / fname.name
             motions[participant, motion].append(path)
 
     return motions
@@ -139,20 +140,13 @@ def _process_single_file(participant: Path, motion: str, f: Path) -> dict[str, A
 
 
 def process_motion_files(
-    motions: dict[tuple[Path, str], list[Path]],
+    motions: dict[tuple[str, str], list[Path]],
 ) -> pd.DataFrame:
-    summary_rows = []
+    tasks = [(participant, motion, f) for (participant, motion), files in motions.items() for f in files]
+    with Pool() as executor:
+        results = executor.starmap(_process_single_file, tasks)
 
-    tasks = []
-    for (participant, motion), files in motions.items():
-        logger.info("Starting: %s %s", participant, motion)
-        tasks.extend((participant, motion, f) for f in files)
-
-    with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(_process_single_file, participant, motion, f) for participant, motion, f in tasks]
-
-        summary_rows.extend(future.result() for future in as_completed(futures))
-    return pd.DataFrame(summary_rows)
+    return pd.DataFrame(results)
 
 
 def main() -> None:

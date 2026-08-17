@@ -149,7 +149,7 @@ def main() -> None:
 
     logger.info(latex)
     output_file_latex = output_dir_latex / "emg-snr-per-participant.txt"
-    Path(output_file_latex).write_text(latex, encoding="utf-8", newline="")
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
     logger.info("Done. Processed: %d trials!", len(summary_df))
 

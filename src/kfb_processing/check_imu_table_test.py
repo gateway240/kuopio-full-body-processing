@@ -4,7 +4,7 @@ import argparse
 import logging
 import pathlib
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -40,23 +40,24 @@ def read_sto_file(filepath: Path) -> pd.DataFrame:
 
 def collect_motion_files(
     root_dir: Path,
-) -> defaultdict[tuple[str, str], list[str]]:
+) -> defaultdict[tuple[str, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: defaultdict[tuple[str, str], list[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
 
-    for participant in root_dir.iterdir():
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         directory = root_dir / participant / "imu"
         if not directory.is_dir():
             continue
 
-        for fname in Path.iterdir(directory):
-            if fname != TEST_FILENAME:
+        for fname in directory.iterdir():
+            if fname.name != TEST_FILENAME:
                 continue
 
-            motion = fname.rsplit("-", 1)[0]
-            path = directory / fname
+            motion = fname.name.rsplit("-", 1)[0]
+            path = directory / fname.name
             motions[participant, motion].append(path)
 
     return motions
@@ -214,19 +215,23 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path) -> None:
 
 
 def process_motion_files(
-    motions: dict[tuple[str, str], list[str]],
+    motions: dict[tuple[str, str], list[Path]],
     output_dir: Path,
 ) -> pd.DataFrame:
     tasks_stage1 = [
         (participant, trial, f, output_dir) for (participant, trial), files in motions.items() for f in files
     ]
 
-    with ProcessPoolExecutor() as executor:
+    with Pool() as executor:
         try:
-            results = list(executor.map(_process_single_file, tasks_stage1))
+            results = executor.starmap(
+                _process_single_file,
+                tasks_stage1,
+            )
         except KeyboardInterrupt:
             logger.info("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            executor.terminate()
+            executor.join()
             raise
 
     summary_df = pd.DataFrame(results)
@@ -263,6 +268,7 @@ def main() -> None:
     motions = collect_motion_files(args.source_dir)
     # logger.info(motions)
     summary_df = process_motion_files(motions, output_dir)
+    logger.info(summary_df.head())
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
     logger.info(summary_df)
@@ -336,7 +342,7 @@ def main() -> None:
 
     logger.info(latex)
     output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
-    Path(output_file_latex).write_text(latex, encoding="utf-8", newline="")
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
     logger.info("Done. Processed: %d trials!", len(summary_df))
 

@@ -81,7 +81,7 @@ KNOWN_TRIALS = {
 
 def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
     logger.info("Starting on: %s", file_path)
-    with Path(file_path).open("r", encoding="utf-8") as file:
+    with file_path.open("r", encoding="utf-8") as file:
         # Skip header
         for line in file:
             if line.strip() == "endheader":
@@ -136,27 +136,28 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
 # 1. PAIR FILES BY TRIAL
 # ---------------------------
 def filter_motion_trials(
-    trials: dict[tuple[Path, str], dict[str, Path]],
+    trials: dict[tuple[str, str], dict[str, Path]],
     known_trials: set[str],
-) -> dict[tuple[Path, str], dict[str, Path]]:
+) -> dict[tuple[str, str], dict[str, Path]]:
     return {key: data for key, data in trials.items() if key[1] in known_trials}
 
 
-def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
+def collect_motion_files(root_dir: Path) -> dict[tuple[str, str], dict[str, Path]]:
     trials = {}
 
-    for participant in root_dir.iterdir():
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         imu_dir = root_dir / participant / "imu"
         mocap_dir = root_dir / participant / "mocap"
         logger.info("IMU dir: %s Mocap dir: %s", imu_dir, mocap_dir)
-        if not Path(imu_dir).is_dir() or not Path(mocap_dir).is_dir():
+        if not imu_dir.is_dir() or not mocap_dir.is_dir():
             logger.info("ERROR in dir!")
             continue
 
         # index mocap
         analog_files = {
-            f.name.replace("_analog.sto", ""): mocap_dir / f
-            for f in Path.iterdir(mocap_dir)
+            f.name.replace("_analog.sto", ""): mocap_dir / f.name
+            for f in mocap_dir.iterdir()
             if f.name.endswith("_analog.sto")
         }
 
@@ -164,7 +165,6 @@ def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Pat
         for trial_name, path in analog_files.items():
             # if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
             trials[participant, trial_name] = {
-                "participant": participant,
                 "analog": path,
             }
     # logger.info(trials)
@@ -338,7 +338,7 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
         best_windows[col] = best_start
 
     if PLOT_RESULTS:
-        save_path = Path(output_dir) / f"{participant}_{trial_name}_emg.png"
+        save_path = output_dir / f"{participant}_{trial_name}_emg.png"
         plot_emg_signals(
             emg_df,
             snr_dict,
@@ -360,7 +360,7 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
 # 5. PIPELINE
 # ---------------------------
 def process_motion_files(
-    motions: dict[tuple[Path, str], dict[str, Path]],
+    motions: dict[tuple[str, str], dict[str, Path]],
     output_dir: Path,
 ) -> pd.DataFrame:
     tasks_stage1 = [(participant, trial, info) for (participant, trial), info in motions.items()]

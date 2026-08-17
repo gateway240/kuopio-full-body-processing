@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -168,28 +168,28 @@ def get_last_packet_counter(data_lines: list[str]) -> int:
 
 
 def filter_motion_trials(
-    trials: dict[tuple[Path, str], dict[str, Path]],
+    trials: dict[tuple[str, str], dict[str, Path]],
     known_trials: dict[str, set[str]],
-) -> dict[tuple[Path, str], dict[str, Path]]:
-    return {key: data for key, data in trials.items() if key[1] in known_trials.get(key[0].name, set())}
+) -> dict[tuple[str, str], dict[str, Path]]:
+    return {key: data for key, data in trials.items() if key[1] in known_trials}
 
 
-def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
+def collect_motion_files(root_dir: Path) -> dict[tuple[str, str], dict[str, Path]]:
     trials = {}
 
-    for participant in root_dir.iterdir():
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         mocap_dir = root_dir / participant / "mocap"
 
         # index mocap
         trc_files = {
-            f.name.replace("_markers.trc", ""): mocap_dir / f
-            for f in Path.iterdir(mocap_dir)
+            f.name.replace("_markers.trc", ""): mocap_dir / f.name
+            for f in mocap_dir.iterdir()
             if f.name.endswith("_markers.trc")
         }
         # match
         for trial_name, trc_path in trc_files.items():
             trials[participant, trial_name] = {
-                "participant": participant,
                 "trc": trc_path,
             }
     # logger.info(trials)
@@ -215,7 +215,7 @@ def _process_single_trial(
 
     missing_count = len(missing_markers)
 
-    logger.info("Missing markers: %d", missing_markers)
+    logger.info("Missing markers: %s", missing_markers)
     logger.info("Number of missing markers: %d", missing_count)
 
     total_elements = df.size
@@ -241,7 +241,7 @@ def _process_single_trial(
 
 
 def process_motion_files(
-    motions: dict[tuple[Path, str], dict[str, Path]],
+    motions: dict[tuple[str, str], dict[str, Path]],
 ) -> pd.DataFrame:
     tasks_stage1 = [
         (
@@ -252,12 +252,16 @@ def process_motion_files(
         )
         for (participant, trial), info in motions.items()
     ]
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with Pool(processes=MAX_WORKERS) as executor:
         try:
-            results = list(executor.map(_process_single_trial, tasks_stage1))
+            results = executor.starmap(
+                _process_single_trial,
+                tasks_stage1,
+            )
         except KeyboardInterrupt:
             logger.info("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            executor.terminate()
+            executor.join()
             raise
 
     return pd.DataFrame(results)
@@ -285,6 +289,7 @@ def main() -> None:
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
     logger.info(motions)
     summary_df = process_motion_files(motions)
+    logger.info(summary_df.head())
     summary_df = summary_df.drop(["file", "star_columns"], axis=1)
     summary_df = summary_df.sort_values(["participant", "trial"])
     logger.info(summary_df)
@@ -345,7 +350,7 @@ def main() -> None:
 
     logger.info(latex)
     output_file_latex = output_dir_latex / "optical-continuity-per-participant.txt"
-    Path(output_file_latex).write_text(latex, encoding="utf-8", newline="")
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
     logger.info("Done. Processed: %d trials!", len(summary_df))
 

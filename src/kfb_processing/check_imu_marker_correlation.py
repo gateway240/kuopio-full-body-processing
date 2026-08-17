@@ -180,9 +180,9 @@ def read_opensim_marker_file(
 # 1. PAIR FILES BY TRIAL
 # ---------------------------
 def filter_motion_trials(
-    trials: dict[tuple[Path, str], dict[str, Path]],
+    trials: dict[tuple[str, str], dict[str, Path]],
     known_trials: set[str],
-) -> dict[tuple[Path, str], dict[str, Path]]:
+) -> dict[tuple[str, str], dict[str, Path]]:
     return {key: data for key, data in trials.items() if key[1] in known_trials}
 
 
@@ -205,10 +205,11 @@ def is_versioned_trial(filename: str, suffix: str) -> bool:
     return last_part.isdigit()
 
 
-def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Path]]:
+def collect_motion_files(root_dir: Path) -> dict[tuple[str, str], dict[str, Path]]:
     trials = {}
 
-    for participant in root_dir.iterdir():
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
         imu_dir = root_dir / participant / "imu"
         mocap_dir = root_dir / participant / "mocap"
         logger.info("IMU dir: %s Mocap dir: %s", imu_dir, mocap_dir)
@@ -218,8 +219,8 @@ def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Pat
 
         # index mocap
         trc_files = {
-            f.name.replace("_markers.trc", ""): mocap_dir / f
-            for f in Path.iterdir(mocap_dir)
+            f.name.replace("_markers.trc", ""): mocap_dir / f.name
+            for f in mocap_dir.iterdir()
             if f.name.endswith("_markers.trc")
         }
         # index imu
@@ -238,7 +239,6 @@ def collect_motion_files(root_dir: Path) -> dict[tuple[Path, str], dict[str, Pat
         for trial_name, trc_path in trc_files.items():
             if trial_name in sto_acceleration_files and trial_name in sto_orientation_files:
                 trials[participant, trial_name] = {
-                    "participant": participant,
                     "trc": trc_path,
                     "sto_acceleration": sto_acceleration_files[trial_name],
                     "sto_orientation": sto_orientation_files[trial_name],
@@ -546,7 +546,7 @@ def _process_single_trial(participant: str, trial_name: str, info: dict[str, str
 # 5. PIPELINE
 # ---------------------------
 def process_motion_files(
-    motions: dict[tuple[Path, str], dict[str, Path]],
+    motions: dict[tuple[str, str], dict[str, Path]],
     output_dir: Path,
 ) -> pd.DataFrame:
     tasks_stage1 = [(participant, trial, info) for (participant, trial), info in motions.items()]
