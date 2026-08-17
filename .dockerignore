@@ -11,3 +11,4 @@ data
 out
 # Don't want host build files to carry to the container
 **/build/
+!compile_commands.json

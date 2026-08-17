@@ -176,7 +176,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Validate imu/ and mocap/ folders.")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
 

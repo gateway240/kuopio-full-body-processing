@@ -122,7 +122,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check IMU file lengths and fix")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
