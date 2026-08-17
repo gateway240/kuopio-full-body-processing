@@ -38,23 +38,19 @@ repos:
           - id: pretty-format-json
           - id: trailing-whitespace
             exclude: (\.trc$|\.sto$)
-
+    - repo: https://github.com/astral-sh/uv-pre-commit
+      # uv version.
+      rev: 0.12.3
+      hooks:
+          - id: uv-lock
     - repo: https://github.com/astral-sh/ruff-pre-commit
-      rev: v0.13.1
+      rev: v0.16.2
       hooks:
           - id: ruff-check
             args: [--fix]
           - id: ruff-format
-
-    - repo: local
+    - repo: https://github.com/astral-sh/ty-pre-commit
+      # ty version.
+      rev: v0.0.70
       hooks:
-          - id: mypy
-            name: mypy type-check
-            entry: ./scripts/run-mypy.sh
-            language: system
-            types: [python]
-            require_serial: true
-            verbose: true
-            pass_filenames: false
-            args:
-                - --config-file=pyproject.toml
+          - id: ty

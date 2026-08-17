@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -march=native")
-
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # Find and hook up to OpenSim.
 # ----------------------------
 set(OpenSim_DIR "~/opensim-core/cmake")

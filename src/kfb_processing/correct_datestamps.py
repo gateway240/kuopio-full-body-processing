@@ -1,38 +1,47 @@
 import argparse
+import logging
 import os
 from pathlib import Path
 
 # Add this jankness for windows timestamps
 TIMEZONE_OFFSET = 2 * 3600
 
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Match files and overwrite timestamps."
+        description="Match files and overwrite timestamps.",
     )
     parser.add_argument(
         "--input_dir",
         required=True,
+        type=Path,
         help="Input directory containing P### folders with files",
     )
     parser.add_argument(
         "--output_dir",
         required=True,
+        type=Path,
         help="Output directory containing files to update timestamps for",
     )
     args = parser.parse_args()
 
-    input_dir = Path(os.path.expanduser(args.input_dir))
-    output_dir = Path(os.path.expanduser(args.output_dir))
+    input_dir = args.input_dir.expanduser()
+    output_dir = args.output_dir.expanduser()
 
     if not input_dir.exists():
-        raise FileNotFoundError(f"Input directory does not exist: {input_dir}")
+        msg = f"Input directory does not exist: {input_dir}"
+        raise FileNotFoundError(msg)
 
     if not output_dir.exists():
-        raise FileNotFoundError(f"Output directory does not exist: {output_dir}")
+        msg_0 = f"Output directory does not exist: {output_dir}"
+        raise FileNotFoundError(msg_0)
 
     # Walk through input directory structure
-    for root, dirs, files in os.walk(input_dir):
+    for root, _dirs, files in os.walk(input_dir):
         for file in files:
             input_file = Path(root) / file
             input_name = input_file.name.lower()
@@ -54,9 +63,9 @@ def main() -> None:
                 new_mtime = stat.st_mtime + TIMEZONE_OFFSET
                 os.utime(out_file, (new_atime, new_mtime))
 
-                print(f"[OK] Matched: {input_file.name}  →  {out_file.name}")
+                logger.info("[OK] Matched: %s  →  %s", input_file.name, out_file.name)
 
-    print("Done.")
+    logger.info("Done.")
 
 
 if __name__ == "__main__":

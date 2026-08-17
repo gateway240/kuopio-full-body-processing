@@ -1,17 +1,27 @@
 from __future__ import annotations
-import pathlib
 
 import argparse
-import os
+import logging
+import pathlib
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Pool
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.spatial.transform import Rotation as R
+from scipy.spatial.transform import Rotation
+
+if TYPE_CHECKING:
+    from collections.abc import Hashable
+
+    import scipy
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 TEST_FILENAME = "table_test_orientations.sto"
 
@@ -19,75 +29,69 @@ PLOT_RESULTS = False
 
 
 def read_sto_file(filepath: Path) -> pd.DataFrame:
-    print("Starting on: ", filepath)
-    with open(filepath, "r") as file:
+    logger.info("Starting on: %s", filepath)
+    with Path(filepath).open("r", encoding="utf-8") as file:
         # Skip header
         for line in file:
             if line.strip() == "endheader":
                 break
-        df = pd.read_csv(file, sep="\t", header=0, index_col=0)
-
-    return df
+        return pd.read_csv(file, sep="\t", header=0, index_col=0)
 
 
 def collect_motion_files(
-    root_dir: str,
-) -> DefaultDict[Tuple[str, str], List[str]]:
+    root_dir: Path,
+) -> defaultdict[tuple[str, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: DefaultDict[Tuple[str, str], List[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
 
-    for participant in os.listdir(root_dir):
-        dir: str = os.path.join(root_dir, participant, "imu")
-        if not os.path.isdir(dir):
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
+        directory = root_dir / participant / "imu"
+        if not directory.is_dir():
             continue
 
-        for fname in os.listdir(dir):
-            if not fname == TEST_FILENAME:
+        for fname in directory.iterdir():
+            if fname.name != TEST_FILENAME:
                 continue
 
-            motion = fname.rsplit("-", 1)[0]
-            path = os.path.join(dir, fname)
-            motions[(participant, motion)].append(path)
+            motion = fname.name.rsplit("-", 1)[0]
+            path = directory / fname.name
+            motions[participant, motion].append(path)
 
     return motions
 
 
-def parse_quaternion(q_str):
+def parse_quaternion(q_str: str) -> np.ndarray:
     """Convert string 'w,x,y,z' → list of floats"""
     return np.array([float(x) for x in q_str.split(",")])
 
 
-def quaternion_series_to_euler(series):
+def quaternion_series_to_euler(series: pd.Series) -> scipy.Array:
     """Convert a pandas Series of quaternion strings to Euler angles"""
-    quats = np.vstack(series.dropna().apply(parse_quaternion).values)
-
+    quats = np.vstack(
+        series.dropna().map(parse_quaternion).tolist(),
+    )
     # scipy expects [x, y, z, w], so reorder if needed
     # assuming your format is [w, x, y, z]
     quats_xyzw = np.column_stack([quats[:, 1], quats[:, 2], quats[:, 3], quats[:, 0]])
 
-    rotations = R.from_quat(quats_xyzw)
-    euler = rotations.as_euler("xyz", degrees=True)  # roll, pitch, yaw
-
-    return euler
+    rotations = Rotation.from_quat(quats_xyzw)
+    return rotations.as_euler("xyz", degrees=True)  # roll, pitch, yaw
 
 
-def plot_euler(df, output_path):
+def plot_euler(df: pd.DataFrame, output_path: Path) -> None:
     fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
 
     ax_roll, ax_pitch, ax_yaw = axes
 
     for col in df.columns:
-        try:
-            euler = quaternion_series_to_euler(df[col])
+        euler = quaternion_series_to_euler(df[col])
 
-            ax_roll.plot(euler[:, 0], label=col)
-            ax_pitch.plot(euler[:, 1], label=col)
-            ax_yaw.plot(euler[:, 2], label=col)
-
-        except Exception as e:
-            print(f"Skipping column {col}: {e}")
+        ax_roll.plot(euler[:, 0], label=col)
+        ax_pitch.plot(euler[:, 1], label=col)
+        ax_yaw.plot(euler[:, 2], label=col)
 
     # Formatting
     ax_roll.set_title("Roll (X)")
@@ -96,7 +100,7 @@ def plot_euler(df, output_path):
 
     for ax in axes:
         ax.set_ylabel("Degrees")
-        ax.grid(True)
+        ax.grid(True)  # ruff: ignore[boolean-positional-value-in-call]
         ax.legend(fontsize=8)
 
     ax_yaw.set_xlabel("Frame")
@@ -106,12 +110,11 @@ def plot_euler(df, output_path):
     plt.close(fig)
 
 
-def _process_single_file(args):
-    participant, motion, f, output_dir = args
+def _process_single_file(participant: str, motion: str, f: Path, output_dir: Path) -> dict[str | Hashable, Any]:
 
-    path = Path(f)
+    path = f
     df = read_sto_file(path)
-    # print(df)
+    # logger.info(df)
 
     df_euler = pd.concat(
         [
@@ -128,7 +131,7 @@ def _process_single_file(args):
         ],
         axis=1,
     )
-    print(df_euler)
+    logger.info(df_euler)
     means, stds = df_euler.mean().to_numpy(), df_euler.std().to_numpy()
 
     # interleave
@@ -136,7 +139,7 @@ def _process_single_file(args):
         np.column_stack([means, stds]).reshape(1, -1),
         columns=[f"{c}_{stat}" for c in df_euler.columns for stat in ["mean", "std"]],
     )
-    print(summary)
+    logger.info(summary)
     summary_dict = summary.iloc[0].to_dict()
 
     if PLOT_RESULTS:
@@ -152,7 +155,7 @@ def _process_single_file(args):
     }
 
 
-def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
+def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path) -> None:
     """
     One figure per sensor.
     Each figure shows roll/pitch/yaw.
@@ -169,16 +172,12 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
             df = row["df"]
 
             for sensor in df.columns:
-                try:
-                    euler = quaternion_series_to_euler(df[sensor])
+                euler = quaternion_series_to_euler(df[sensor])
 
-                    if sensor not in sensor_data:
-                        sensor_data[sensor] = {}
+                if sensor not in sensor_data:
+                    sensor_data[sensor] = {}
 
-                    sensor_data[sensor][participant] = euler
-
-                except Exception:
-                    continue
+                sensor_data[sensor][participant] = euler
 
         # plot per sensor
         for sensor, participants in sensor_data.items():
@@ -187,9 +186,9 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
             sorted_participants = sorted(
                 participants.items(),
-                key=lambda x: int("".join(filter(str.isdigit, str(x[0]))))
-                if any(c.isdigit() for c in str(x[0]))
-                else str(x[0]),
+                key=lambda x: (
+                    int("".join(filter(str.isdigit, str(x[0])))) if any(c.isdigit() for c in str(x[0])) else str(x[0])
+                ),
             )
 
             for participant, euler in sorted_participants:
@@ -203,7 +202,7 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
             for ax in axes:
                 ax.set_ylabel("Degrees")
-                ax.grid(True)
+                ax.grid(True)  # ruff: ignore[boolean-positional-value-in-call]
                 ax.legend(fontsize=7, loc="upper right")
 
             ax_yaw.set_xlabel("Frame")
@@ -216,20 +215,23 @@ def aggregate_and_plot(summary_df: pd.DataFrame, output_dir: Path):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path
+    motions: dict[tuple[str, str], list[Path]],
+    output_dir: Path,
 ) -> pd.DataFrame:
     tasks_stage1 = [
-        (participant, trial, f, output_dir)
-        for (participant, trial), files in motions.items()
-        for f in files
+        (participant, trial, f, output_dir) for (participant, trial), files in motions.items() for f in files
     ]
 
-    with ProcessPoolExecutor() as executor:
+    with Pool() as executor:
         try:
-            results = list(executor.map(_process_single_file, tasks_stage1))
+            results = executor.starmap(
+                _process_single_file,
+                tasks_stage1,
+            )
         except KeyboardInterrupt:
-            print("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            logger.info("Interrupted")
+            executor.terminate()
+            executor.join()
             raise
 
     summary_df = pd.DataFrame(results)
@@ -241,7 +243,7 @@ def process_motion_files(
 def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
-    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")
+    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")  # ruff: ignore[ambiguous-unicode-character-string]
     return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
 
 
@@ -249,25 +251,27 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
     )
 
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = args.output_dir
+    output_dir.mkdir(exist_ok=True, parents=True)
 
     motions = collect_motion_files(args.source_dir)
-    # print(motions)
+    # logger.info(motions)
     summary_df = process_motion_files(motions, output_dir)
+    logger.info(summary_df.head())
     summary_df = summary_df.drop(["file", "trial", "df"], axis=1)
     summary_df = summary_df.sort_values(["participant"])
-    print(summary_df)
+    logger.info(summary_df)
 
     output_file = output_dir / "imu-table-test.csv"
     summary_df.to_csv(output_file, index=False)
@@ -282,30 +286,33 @@ def main() -> None:
             "roll_mean": summary_df[roll_cols].mean(axis=1),
             "roll_std": summary_df[roll_cols].std(axis=1),
             "roll_delta": summary_df[roll_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",  # ruff: ignore[ambiguous-unicode-character-string]
+                axis=1,
             ),
             "pitch_mean": summary_df[pitch_cols].mean(axis=1),
             "pitch_std": summary_df[pitch_cols].std(axis=1),
             "pitch_delta": summary_df[pitch_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",  # ruff: ignore[ambiguous-unicode-character-string]
+                axis=1,
             ),
             "yaw_mean": summary_df[yaw_cols].mean(axis=1),
             "yaw_std": summary_df[yaw_cols].std(axis=1),
             "yaw_delta": summary_df[yaw_cols].apply(
-                lambda x: f"{x.min():.1f} – {x.max():.1f}", axis=1
+                lambda x: f"{x.min():.1f} – {x.max():.1f}",  # ruff: ignore[ambiguous-unicode-character-string]
+                axis=1,
             ),
             # "yaw_delta":  summary_df[yaw_cols].max(axis=1)
             # - summary_df[yaw_cols].min(axis=1),
-        }
+        },
     )
-    print(summary_stats)
+    logger.info(summary_stats)
 
     output_dir_latex = pathlib.Path("out")
     output_file = output_dir_latex / "imu-table-test-per-participant.csv"
     summary_stats.to_csv(output_file, index=False)
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "roll_mean": r"X $\mu$",
         "roll_std": r"X $\sigma$",
         "roll_delta": r"X $\Delta$",
@@ -322,7 +329,7 @@ def main() -> None:
     latex = summary_stats.to_latex(
         index=False,
         caption=(
-            "IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+            r"IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
             "All values are presented in degrees (°). "
             "X,Y, and Z represent roll, pitch, and yaw respectively. "
             "Sensors were placed on a flat, non-metallic table with the same orientation "
@@ -333,12 +340,11 @@ def main() -> None:
         float_format="%.2f",
     )
 
-    print(latex)
+    logger.info(latex)
     output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

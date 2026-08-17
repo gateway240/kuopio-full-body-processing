@@ -1,109 +1,91 @@
-[build-system]
-requires = ["setuptools >= 77.0.3"]
-build-backend = "setuptools.build_meta"
-
 [project]
-name = 'kuopio-full-body-processing'
+name = 'kfb_processing'
 version = '1.0.0'
-requires-python = ">=3.11.0"
+requires-python = ">=3.12,<3.14"
 license = "MIT"
 authors = [
   { name = "Alexander Beattie", email = "alex.beattie@gateway240.com" },
 ]
 
 dependencies = [
-  "Jinja2==3.1.6",
-  "numpy==2.3.3",
-  "matplotlib>=3.10.8",
-  "pandas==2.3.3",
-  "scipy>=1.17.1",
-  "tabulate==0.9.0",
+  "Jinja2~=3.1.6",
+  "numpy~=2.3.3",
+  "matplotlib~=3.11.1",
+  "pandas~=2.3.3",
+  "scipy~=1.18.0",
+  "tabulate~=0.9.0",
 ]
 
 [project.optional-dependencies]
-dev = ['ruff==0.13.1', 'mypy', 'pre-commit', 'pandas-stubs', 'types-tabulate']
+dev = ['ruff', 'ty', 'pre-commit', 'pandas-stubs', 'types-tabulate']
 
-# https://pragmaticdatadev.substack.com/p/replacing-black-flake8-isort-and
+
 [tool.ruff]
-# Same as Black.
-line-length = 88
-indent-width = 4
+line-length = 120
+target-version = "py311"
 
-# Assume Python 3.9
-target-version = "py39"
-# Exclude a variety of commonly ignored directories.
-exclude = [
-  ".bzr",
-  ".direnv",
-  ".eggs",
-  ".git",
-  ".git-rewrite",
-  ".hg",
-  ".ipynb_checkpoints",
-  ".mypy_cache",
-  ".nox",
-  ".pants.d",
-  ".pyenv",
-  ".pytest_cache",
-  ".pytype",
-  ".ruff_cache",
-  ".svn",
-  ".tox",
-  ".venv",
-  ".vscode",
-  "__pypackages__",
-  "_build",
-  "buck-out",
-  "build",
-  "dist",
-  "node_modules",
-  "site-packages",
-  "venv",
-]
 [tool.ruff.lint]
-
-# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`)  codes by default.
-# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
-# McCabe complexity (`C901`) by default
-# I is for import sorting.
-select = ["E4", "E7", "E9", "F", "I"]
-ignore = []
-
-# Allow fix for all enabled rules (when `--fix`) is provided.
-fixable = ["ALL"]
-unfixable = []
-
+preview = true
+extend-select = [
+  "ASYNC", # flake8-async
+  "ANN",   # flake8-annotations
+  "BLE",   # flake8-blind-except
+  "FBT",   # flake8-boolean-trap
+  "B",     # flake8-bugbear
+  "A",     # flake8-builtins
+  "COM",   # flake8-commas
+  "C4",    # Catch incorrect use of comprehensions, dict, list, etc
+  "DTZ",   # flake8-datetimez
+  "T10",   # flake8-debugger
+  "EM",    # flake8-errmsg
+  "EXE",   # flake8-executable
+  "FIX",   # flake8-fixme
+  "FA",    # flake8-future-annotations
+  "INT",   # flake8-gettext
+  "ISC",   # Good use of string concatenation
+  "ICN",   # Use common import conventions
+  "LOG",   # flake8-logging
+  "G",     # flake8-logging-format
+  "INP",   # flake8-no-pep420
+  "PIE",   # flake8-pie
+  "T20",   # flake8-print
+  "PYI",   # flake8-pyi
+  "PT",    # flake8-pytest-style
+  "Q",     # flake8-quotes
+  "RSE",   # flake8-raise
+  "RET",   # Good return practices\
+  "SLF",   # flake8-self
+  "SIM",   # Common simplification rules
+  "SLOT",  # flake8-slots
+  "TID",   # Some good import practices
+  "TD",    # Be diligent with TODO comments
+  "TC",    # Enforce importing certain types in a TYPE_CHECKING block
+  "ARG",   # flake8-unused-arguments
+  "PTH",   # Use pathlib instead of os.path
+  "FLY",   # flynt
+  "I",     # Sort imports properly
+  "C90",   # mccabe
+  "NPY",   # Some numpy-specific things]
+  "PD",    # pandas-vet
+  "N",     # pep8-naming
+  "PERF",  # perflint
+  "E",     # PyCodeStyle errors
+  "W",     # PyCodeStyle warnings
+  "F",     # Pyflakes rules
+  "PL",    # pylint
+  "UP",    # Warn if certain things can changed due to newer Python versions
+  "FURB",  # refurb
+  "RUF",   # ruff-specific rules
+  "TRY",   # tryceratops
+]
 [tool.ruff.format]
-
-# Like Black, use double quotes for strings.
+preview = true
 quote-style = "double"
-
-# Like Black, indent with spaces, rather than tabs.
 indent-style = "space"
-
-# Like Black, respect magic trailing commas.
 skip-magic-trailing-comma = false
 
-# Like Black, automatically detect the appropriate line ending.
-line-ending = "auto"
+[tool.ty.rules]
+all = "error"
 
-# Enable auto-formatting of code examples in docstrings. Markdown,
-# reStructuredText code/literal blocks and doctests are all supported.
-#
-# This is currently disabled by default, but it is planned for this
-# to be opt-out in the future.
-docstring-code-format = false
-
-# Set the line length limit used when formatting code snippets in
-# docstrings.
-#
-# This only has an effect when the `docstring-code-format` setting is
-# enabled.
-docstring-code-line-length = "dynamic"
-
-[tool.ruff.lint.pydocstyle]
-convention = "pep257" # Accepts: "google", "numpy", or "pep257".
-
-[tool.mypy]
-strict = true
-files = [""]  # <-- only type-check files under this dir e.g. src/
+[tool.ty.environment]
+python = ".venv/bin/python"

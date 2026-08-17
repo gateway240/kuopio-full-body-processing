@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 import argparse
-import os
-from concurrent.futures import ProcessPoolExecutor
+import logging
+from multiprocessing import Pool
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
+
+if TYPE_CHECKING:
+    from pandas.io.formats.style_render import ExtFormatter
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # max_workers: The maximum number of processes that can be used to
 #     execute the given calls. If None or not given then as many
@@ -121,7 +128,7 @@ def read_opensim_marker_file(
 
     # Extract the two header rows
     header1 = raw.iloc[0].ffill()  # marker names (forward fill!)
-    # print(header1)
+    # logger.info(header1)
     header2 = raw.iloc[1]  # X1, Y1, Z1...
 
     # Build clean column names
@@ -155,72 +162,70 @@ def read_opensim_marker_file(
     return df.apply(pd.to_numeric, errors="coerce")
 
 
-def get_last_packet_counter(data_lines: List[str]) -> int:
+def get_last_packet_counter(data_lines: list[str]) -> int:
     last_line: str = data_lines[-1]
-    return int(last_line.split("\t")[0])
+    return int(last_line.split("\t", maxsplit=1)[0])
 
 
 def filter_motion_trials(
-    trials: dict,
+    trials: dict[tuple[str, str], dict[str, Path]],
     known_trials: dict[str, set[str]],
-):
-    filtered = {key: data for key, data in trials.items() if key[1] in known_trials}
-
-    return filtered
+) -> dict[tuple[str, str], dict[str, Path]]:
+    return {key: data for key, data in trials.items() if key[1] in known_trials}
 
 
-def collect_motion_files(root_dir: str):
+def collect_motion_files(root_dir: Path) -> dict[tuple[str, str], dict[str, Path]]:
     trials = {}
 
-    for participant in os.listdir(root_dir):
-        mocap_dir = os.path.join(root_dir, participant, "mocap")
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
+        mocap_dir = root_dir / participant / "mocap"
 
         # index mocap
         trc_files = {
-            f.replace("_markers.trc", ""): os.path.join(mocap_dir, f)
-            for f in os.listdir(mocap_dir)
-            if f.endswith("_markers.trc")
+            f.name.replace("_markers.trc", ""): mocap_dir / f.name
+            for f in mocap_dir.iterdir()
+            if f.name.endswith("_markers.trc")
         }
         # match
         for trial_name, trc_path in trc_files.items():
-            trials[(participant, trial_name)] = {
-                "participant": participant,
+            trials[participant, trial_name] = {
                 "trc": trc_path,
             }
-    # print(trials)
+    # logger.info(trials)
     return trials
 
 
-def _process_single_trial(args):
-    info, participant, trial, participant_markers = args
+def _process_single_trial(
+    info: dict[str, Path],
+    participant: Path,
+    trial: str,
+    participant_markers: set[str],
+) -> dict[str, Any]:
     trc = info["trc"]
 
     df = read_opensim_marker_file(trc, skip=3)
     star_columns_count = df.columns.str.startswith("*").sum()
-    print("Columns starting with '*':", star_columns_count)
+    logger.info("Columns starting with '*':%d", star_columns_count)
 
     df = df.loc[:, df.columns.str.startswith(tuple(participant_markers))]
 
-    present_markers = {
-        marker
-        for marker in participant_markers
-        if any(col.startswith(marker) for col in df.columns)
-    }
+    present_markers = {marker for marker in participant_markers if any(col.startswith(marker) for col in df.columns)}
     missing_markers = participant_markers - present_markers
 
     missing_count = len(missing_markers)
 
-    print("Missing markers:", missing_markers)
-    print("Number of missing markers:", missing_count)
+    logger.info("Missing markers: %s", missing_markers)
+    logger.info("Number of missing markers: %d", missing_count)
 
     total_elements = df.size
-    print("Total number of elements:", total_elements)
+    logger.info("Total number of elements: %d", total_elements)
 
-    total_nan_count = df.isnull().sum().sum()
-    print("Total NaN count:", total_nan_count)
+    total_nan_count = df.isna().sum().sum()
+    logger.info("Total NaN count: %d", total_nan_count)
 
     nan_ratio = total_nan_count / total_elements if total_elements > 0 else 0
-    print(f"Percent NaN: {nan_ratio * 100}%")
+    logger.info("Percent NaN: %d %%", nan_ratio * 100)
 
     return {
         "participant": participant,
@@ -236,7 +241,7 @@ def _process_single_trial(args):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], dry_run: bool = True
+    motions: dict[tuple[str, str], dict[str, Path]],
 ) -> pd.DataFrame:
     tasks_stage1 = [
         (
@@ -247,12 +252,16 @@ def process_motion_files(
         )
         for (participant, trial), info in motions.items()
     ]
-    with ProcessPoolExecutor(max_workers=MAX_WORKERS) as executor:
+    with Pool(processes=MAX_WORKERS) as executor:
         try:
-            results = list(executor.map(_process_single_trial, tasks_stage1))
+            results = executor.starmap(
+                _process_single_trial,
+                tasks_stage1,
+            )
         except KeyboardInterrupt:
-            print("Interrupted")
-            executor.shutdown(cancel_futures=True)
+            logger.info("Interrupted")
+            executor.terminate()
+            executor.join()
             raise
 
     return pd.DataFrame(results)
@@ -262,32 +271,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
     )
 
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
+    output_dir = args.output_dir
 
     motions_raw = collect_motion_files(args.source_dir)
-    print(motions_raw)
+    logger.info(motions_raw)
     motions = filter_motion_trials(motions_raw, KNOWN_TRIALS)
-    print(motions)
-    summary_df = process_motion_files(motions, args.dry_run)
+    logger.info(motions)
+    summary_df = process_motion_files(motions)
+    logger.info(summary_df.head())
     summary_df = summary_df.drop(["file", "star_columns"], axis=1)
     summary_df = summary_df.sort_values(["participant", "trial"])
-    print(summary_df)
+    logger.info(summary_df)
     # Filter out empty sets so it doesn't print set() in the csv
     summary_df = summary_df.map(
-        lambda x: "" if isinstance(x, set) and len(x) == 0 else x
+        lambda x: "" if isinstance(x, set) and len(x) == 0 else x,
     )
     output_file = output_dir / "optical-continuity.csv"
     summary_df.to_csv(output_file, index=False)
@@ -295,7 +303,7 @@ def main() -> None:
     summary_stats = summary_df.groupby("participant", as_index=False).agg(
         mean_nan_percent=("nan_percent", "mean"),
         std_nan_percent=("nan_percent", "std"),
-        range_nan_percent=("nan_percent", lambda x: f"{x.min():.1f} – {x.max():.1f}"),
+        range_nan_percent=("nan_percent", lambda x: f"{x.min():.1f} – {x.max():.1f}"),  # ruff: ignore[ambiguous-unicode-character-string]
         # range_nan_percent=(
         #     "nan_percent",
         #     lambda x: x.max() - x.min(),
@@ -306,11 +314,13 @@ def main() -> None:
     output_file = output_dir_latex / "optical-continuity-per-participant.csv"
     col = summary_stats.columns[0]
     summary_stats.assign(
-        **{col: summary_stats[col].map(lambda x: f"{int(x):02d}")}
+        **{
+            col: summary_stats[col].astype(int).map("{:02d}".format),
+        },
     ).to_csv(output_file, index=False)
 
     rename_map = {
-        "participant": "\#",
+        "participant": r"\#",
         "mean_nan_percent": r"$\mu$",
         "std_nan_percent": r"$\sigma$",
         "range_nan_percent": r"$\Delta$",
@@ -318,19 +328,18 @@ def main() -> None:
 
     summary_stats = summary_stats[list(rename_map.keys())].rename(columns=rename_map)
 
-    fmt = {
-        col: "{:.2f}"
-        for col in summary_stats.columns[1:]
-        if pd.api.types.is_numeric_dtype(summary_stats[col])
+    fmt: ExtFormatter = {
+        col: "{:.2f}" for col in summary_stats.columns[1:] if pd.api.types.is_numeric_dtype(summary_stats[col])
     }
 
     latex = (
-        summary_stats.style.format(fmt)
+        summary_stats.style
+        .format(fmt)
         .hide(axis="index")
         .to_latex(
             caption=(
-                "Optical continuity  (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
-                "The values represent the percentage (\%) of optical data points "
+                r"Optical continuity  (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) "
+                r"for each participant (\#). The values represent the percentage (\%) of optical data points "
                 "in all trials for a given participant which contained NaN values."
             ),
             label="tab:optical_continuity_per_participant",
@@ -339,12 +348,11 @@ def main() -> None:
         )
     )
 
-    print(latex)
+    logger.info(latex)
     output_file_latex = output_dir_latex / "optical-continuity-per-participant.txt"
-    with open(output_file_latex, "w", newline="") as file:
-        file.write(latex)
+    output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

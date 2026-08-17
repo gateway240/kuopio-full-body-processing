@@ -1,18 +1,22 @@
 from __future__ import annotations
 
 import argparse
-import os
+import logging
 from collections import defaultdict
-from concurrent.futures import ProcessPoolExecutor, as_completed
+from multiprocessing import Pool
 from pathlib import Path
-from typing import DefaultDict, Dict, List, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
 
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 def read_file(filepath: Path) -> pd.DataFrame:
-    with open(filepath, "r") as f:
+    with filepath.open("r", encoding="utf-8") as f:
         lines = f.readlines()
 
     # Find the last non-empty line (this contains column names)
@@ -21,7 +25,7 @@ def read_file(filepath: Path) -> pd.DataFrame:
     for i, line in enumerate(lines):
         line_stripped = line.strip()
 
-        if line_stripped.startswith("//") or line_stripped == "":
+        if line_stripped.startswith("//") or not line_stripped:
             continue
 
         # first line that looks like column headers (contains tabs or spaces + text)
@@ -29,38 +33,41 @@ def read_file(filepath: Path) -> pd.DataFrame:
         break
 
     if header_idx is None:
-        raise ValueError("Could not find header line with columns.")
+        msg = "Could not find header line with columns."
+        raise ValueError(msg)
 
-    df = pd.read_csv(filepath, sep="\t", skiprows=header_idx, header=0, index_col=0)
-
-    return df
+    return pd.read_csv(filepath, sep="\t", skiprows=header_idx, header=0, index_col=0)
 
 
 def collect_motion_files(
-    root_dir: str,
-) -> DefaultDict[Tuple[str, str], List[str]]:
+    root_dir: Path,
+) -> dict[tuple[str, str], list[Path]]:
     """
     Key = (participant, motion)
     """
-    motions: DefaultDict[Tuple[str, str], List[str]] = defaultdict(list)
+    motions: defaultdict[tuple[str, str], list[Path]] = defaultdict(list)
 
-    for participant in os.listdir(root_dir):
-        dir: str = os.path.join(root_dir, participant, "imu")
-        if not os.path.isdir(dir):
+    for participant_dir in root_dir.iterdir():
+        participant = participant_dir.name
+        directory = root_dir / participant / "imu"
+        if not directory.is_dir():
             continue
 
-        for fname in os.listdir(dir):
-            if not fname.endswith(".txt"):
+        for fname in Path.iterdir(directory):
+            if not fname.name.endswith(".txt"):
                 continue
 
-            motion = fname.rsplit("-", 1)[0]
-            path = os.path.join(dir, fname)
-            motions[(participant, motion)].append(path)
+            motion = fname.name.rsplit("-", 1)[0]
+            path = directory / fname.name
+            motions[participant, motion].append(path)
 
     return motions
 
 
-def validate_motion_df(df: pd.DataFrame, file_path: str):
+MAX_PACKET = 65535
+
+
+def validate_motion_df(df: pd.DataFrame) -> list[str]:
     errors = []
 
     # --- 1. Check PacketCounter continuity ---
@@ -72,8 +79,6 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
 
     if packet.isna().any():
         errors.append("PacketCounter contains NaNs or non-numeric values")
-
-    MAX_PACKET = 65535
 
     # check monotonic + no gaps (with overflow handling)
     diff = packet.diff().dropna()
@@ -108,24 +113,22 @@ def validate_motion_df(df: pd.DataFrame, file_path: str):
     if coerced.isna().any().any():
         nan_locs = np.where(coerced.isna())
         errors.append(
-            f"Non-numeric/NaN values found at rows={nan_locs[0][:10]}, cols={nan_locs[1][:10]}"
+            f"Non-numeric/NaN values found at rows={nan_locs[0][:10]}, cols={nan_locs[1][:10]}",
         )
 
     return errors
 
 
-def _process_single_file(args):
-    participant, motion, f, output_dir = args
-
-    path = Path(f)
+def _process_single_file(participant: Path, motion: str, f: Path) -> dict[str, Any]:
+    path = f
     df = read_file(path)
 
-    errors = validate_motion_df(df, str(path))
+    errors = validate_motion_df(df)
 
     if errors:
-        print(f"[WARNING] {path}")
+        logger.info("[WARNING] %s", path)
         for e in errors:
-            print("   -", e)
+            logger.info("  - %s", e)
 
     return {
         "participant": participant,
@@ -137,65 +140,49 @@ def _process_single_file(args):
 
 
 def process_motion_files(
-    motions: Dict[Tuple[str, str], List[str]], output_dir: Path, dry_run: bool = True
+    motions: dict[tuple[str, str], list[Path]],
 ) -> pd.DataFrame:
-    summary_rows = []
+    tasks = [(participant, motion, f) for (participant, motion), files in motions.items() for f in files]
+    with Pool() as executor:
+        results = executor.starmap(_process_single_file, tasks)
 
-    tasks = []
-    for (participant, motion), files in motions.items():
-        print("Starting: ", participant, motion)
-        for f in files:
-            tasks.append((participant, motion, f, output_dir))
-
-    with ProcessPoolExecutor() as executor:
-        futures = [executor.submit(_process_single_file, t) for t in tasks]
-
-        for future in as_completed(futures):
-            summary_rows.append(future.result())
-
-    summary_df = pd.DataFrame(summary_rows)
-    return summary_df
+    return pd.DataFrame(results)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Check files")
     parser.add_argument(
         "source_dir",
-        type=str,
+        type=Path,
         help="Root directory containing subject folders",
     )
     parser.add_argument(
         "--output_dir",
         default="out",
+        type=Path,
         help="Directory to save output CSV (default: current directory)",
-    )
-    parser.add_argument(
-        "--dry-run", action="store_true", help="If set, do not write any output files."
     )
 
     args = parser.parse_args()
-    output_dir = Path(args.output_dir)
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = args.output_dir
+    Path(output_dir).mkdir(exist_ok=True, parents=True)
 
     motions = collect_motion_files(args.source_dir)
-    # print(motions)
-    summary_df = process_motion_files(motions, output_dir, args.dry_run)
+    # logger.info(motions)
+    summary_df = process_motion_files(motions)
     summary_df = summary_df.drop("file", axis=1)
     summary_df = summary_df.drop("df", axis=1)
     summary_df = summary_df.map(
-        lambda x: "" if isinstance(x, list) and len(x) == 0 else x
+        lambda x: "" if isinstance(x, list) and len(x) == 0 else x,
     )
     summary_df = (
-        summary_df
-        .sort_values(["participant", "trial"])
-        .groupby(["participant", "trial"], as_index=False)
-        .first()
+        summary_df.sort_values(["participant", "trial"]).groupby(["participant", "trial"], as_index=False).first()
     )
-    print(summary_df)
+    logger.info(summary_df)
     output_file = output_dir / "imu-continuity.csv"
     summary_df.to_csv(output_file, index=False)
 
-    print(f"\nDone. Processed: {len(summary_df)} trials!")
+    logger.info("Done. Processed: %d trials!", len(summary_df))
 
 
 if __name__ == "__main__":

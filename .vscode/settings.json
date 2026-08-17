@@ -1,0 +1,13 @@
+{
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "cSpell.enabled": true,
+  "clangd.arguments": [
+    "-log=verbose",
+    "-pretty",
+    "--background-index",
+    "--compile-commands-dir=./opensim_cpp/build"
+  ],
+  "clangd.checkUpdates": true,
+  "clangd.path": "./opensim_cpp/clangd-wrapper.sh",
+  "python.defaultInterpreterPath": ".venv/bin/python"
+}

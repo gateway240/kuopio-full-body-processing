@@ -1,9 +1,15 @@
-#!/usr/bin/env python3
 import argparse
 import hashlib
+import logging
 import re
 from collections import defaultdict
 from pathlib import Path
+from typing import Any
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 # This script should generate a diagram with no assumptions about structure
 # other than the following:
@@ -46,15 +52,15 @@ VALID_EXTENSIONS = {
 MODALITIES = ["imu", "mocap"]
 
 
-def safe_dirs(path: Path):
+def safe_dirs(path: Path) -> list[Path]:
     return sorted([p for p in path.iterdir() if p.is_dir() and p.name not in IGNORED])
 
 
-def is_allowed(f: Path):
+def is_allowed(f: Path) -> bool:
     return f.suffix.lower() in VALID_EXTENSIONS
 
 
-def group_key(f: Path):
+def group_key(f: Path) -> str:
     name = f.name
 
     for suf in VALID_SUFFIXES:
@@ -64,31 +70,38 @@ def group_key(f: Path):
     return f"TRIAL{f.suffix}" if f.suffix else "TRIAL"
 
 
-def emit(lines, a, b=None):
+def emit(lines: list[str], a: str, b: str | None = None) -> None:
     if b is None:
         lines.append(a)
     else:
         lines.append(f"{a} -> {b}")
 
 
-def emit_node(lines, node_id, label, font_size):
+def emit_node(lines: list[str], node_id: str, label: str, font_size: float) -> None:  # ruff: ignore[unused-function-argument]
     emit(lines, f'{node_id}: "{label}"')
     # emit(lines, f"{node_id}.style.font-size: {font_size}")
 
 
-def node_id(*parts):
-    def clean(s):
+def node_id(*parts: Any) -> str:  # ruff: ignore[any-type]
+    def clean(s: str) -> str:
         return re.sub(r"[^a-zA-Z0-9_]", "_", str(s))
 
     return "__".join(clean(p) for p in parts)
 
 
-def stable_id(*parts):
+def stable_id(*parts: list[str]) -> str:
     key = "/".join(str(p) for p in parts).encode()
     return hashlib.md5(key).hexdigest()[:10]
 
 
-def emit_raw_files(lines, parent_id, files, root_name, session_name, font_size):
+def emit_raw_files(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    lines: list[str],
+    parent_id: str,
+    files: list[Path],
+    root_name: str,
+    session_name: str | None,
+    font_size: float,
+) -> None:
     for f in sorted(files):
         fid = node_id(root_name, session_name or "root", "file", f.name)
         file_node = f"file_{fid}"
@@ -96,9 +109,15 @@ def emit_raw_files(lines, parent_id, files, root_name, session_name, font_size):
         emit(lines, parent_id, file_node)
 
 
-def emit_grouped_files(
-    lines, parent_id, root_name, session_name, participants, modality, font_size
-):
+def emit_grouped_files(  # ruff: ignore[too-many-arguments, too-many-positional-arguments]
+    lines: list[str],
+    parent_id: str,
+    root_name: str,
+    session_name: str,
+    participants: list[Path],
+    modality: str,
+    font_size: float,
+) -> None:
     groups = defaultdict(list)
 
     for p in participants:
@@ -117,28 +136,25 @@ def emit_grouped_files(
         emit(lines, parent_id, file_node)
 
 
-def get_participant_range(session: Path):
+def get_participant_range(session: Path) -> tuple[str, list[Path]]:
     participants = sorted(
         [p for p in session.iterdir() if p.is_dir() and p.name.isdigit()],
         key=lambda x: int(x.name),
     )
     if not participants:
-        return None, []
+        msg = "No participants found!"
+        raise ValueError(msg)
 
     names = [p.name for p in participants]
-    label = f"[{names[0]}–{names[-1]}]" if len(participants) > 1 else f"[{names[0]}]"
+    label = f"[{names[0]}–{names[-1]}]" if len(participants) > 1 else f"[{names[0]}]"  # ruff: ignore[ambiguous-unicode-character-string]
     return label, participants
 
 
-def build(root: Path, lines, font_size):
+def build(root: Path, lines: list[str], font_size: float) -> None:
     root_id = node_id(root.name)
     emit_node(lines, root_id, f"{FOLDER_ICON} {root.name}", font_size)
 
-    root_files = [
-        f
-        for f in root.iterdir()
-        if f.is_file() and f.name not in IGNORED and is_allowed(f)
-    ]
+    root_files = [f for f in root.iterdir() if f.is_file() and f.name not in IGNORED and is_allowed(f)]
     emit_raw_files(lines, root_id, root_files, root.name, None, font_size)
 
     for session in safe_dirs(root):
@@ -146,11 +162,7 @@ def build(root: Path, lines, font_size):
         emit_node(lines, sid, f"{FOLDER_ICON} {session.name}", font_size)
         emit(lines, root_id, sid)
 
-        session_files = [
-            f
-            for f in session.iterdir()
-            if f.is_file() and f.name not in IGNORED and is_allowed(f)
-        ]
+        session_files = [f for f in session.iterdir() if f.is_file() and f.name not in IGNORED and is_allowed(f)]
         emit_raw_files(lines, sid, session_files, root.name, session.name, font_size)
 
         label, participants = get_participant_range(session)
@@ -177,18 +189,17 @@ def build(root: Path, lines, font_size):
             )
 
 
-def generate(root_dir, lines, out, font_size):
-    root = Path(root_dir).resolve()
+def generate(root_dir: Path, lines: list[str], out: Path, font_size: float) -> None:
+    root = root_dir.resolve()
 
     build(root, lines, font_size)
 
-    with open(out, "w") as f:
-        f.write("\n".join(lines))
+    out.write_text("\n".join(lines), encoding="utf-8")
 
-    print(f"Generated: {out}")
+    logger.info("Generated: %s", out)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("directory")
     parser.add_argument("-o", "--output", default="dataset_graph.d2")
@@ -206,7 +217,7 @@ def main():
         "}",
     ]
 
-    generate(args.directory, lines=lines, out=args.output, font_size=args.font_size)
+    generate(Path(args.directory), lines=lines, out=Path(args.output), font_size=args.font_size)
 
 
 if __name__ == "__main__":

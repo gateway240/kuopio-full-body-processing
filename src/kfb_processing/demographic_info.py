@@ -1,8 +1,14 @@
 import argparse
-import os
+import logging
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
+
+# Logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 parser = argparse.ArgumentParser(description="Process data.")
 parser.add_argument(
@@ -13,11 +19,13 @@ parser.add_argument(
 parser.add_argument(
     "--input_dir",
     default="out",
+    type=Path,
     help="Directory to save output CSV (default: current directory)",
 )
 parser.add_argument(
     "--output_dir",
     default="out",
+    type=Path,
     help="Directory to save output CSV (default: current directory)",
 )
 args = parser.parse_args()
@@ -26,9 +34,9 @@ input_csv = args.input_csv
 output_demographic_file = "latex-demographics.txt"
 output_dimensions_file = "latex-dimensions.txt"
 output_dir = args.output_dir
-input_file = os.path.join(args.input_dir, input_csv)
-output_demographic = os.path.join(output_dir, output_demographic_file)
-output_dimensions = os.path.join(output_dir, output_dimensions_file)
+input_file = args.input_dir / input_csv
+output_demographic = output_dir / output_demographic_file
+output_dimensions = output_dir / output_dimensions_file
 
 
 df = pd.read_csv(input_file)
@@ -39,7 +47,7 @@ numeric_df = df.select_dtypes(include=[np.number]).drop(columns=["id"], errors="
 def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFrame:
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
-    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")
+    range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")  # ruff: ignore[ambiguous-unicode-character-string]
     return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
 
 
@@ -54,19 +62,20 @@ num_participants = len(numeric_df)
 index_list = [r"$\mu$", r"$\sigma$", r"$\Delta$"]
 
 summary_basic = summary_table(
-    numeric_df[cols_basic].rename(columns=rename_map), index_list
+    numeric_df[cols_basic].rename(columns=rename_map),
+    index_list,
 )
 
 latex_demographics = summary_basic.to_latex(
     index=True,
-    caption=rf"Demographic summary (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) of the participants (N = {num_participants}) in the dataset",
+    caption=r"Demographic summary (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) of the participants "
+    f"(N = {num_participants}) in the dataset",
     label="tab:anthro_basic",
     escape=False,
     float_format="%.1f",
 )
-print(latex_demographics)
-with open(output_demographic, "w", newline="") as csvfile:
-    csvfile.write(latex_demographics)
+logger.info(latex_demographics)
+output_demographic.write_text(latex_demographics, newline="")
 
 
 cols_custom = [
@@ -115,9 +124,9 @@ rename_map = {
     "knee_width_right": "Knee Width R [cm]",
     "ankle_width_left": "Ankle Width L [cm]",
     "ankle_width_right": "Ankle Width R [cm]",
-    "foot_length_left": "Foot Length L [cm]",
+    "foot_length_left": "Foot Length L/R [cm]",
     "foot_length_right": "Foot Length R [cm]",
-    "foot_width_left": "Foot Width L [cm]",
+    "foot_width_left": "Foot Width L/R [cm]",
     "foot_width_right": "Foot Width R [cm]",
     "hip_width": "Hip Width [cm]",
     "torso_length": "Torso Length [cm]",
@@ -153,7 +162,6 @@ latex_dimensions = summary_transposed.to_latex(
     float_format="%.1f",
 )
 
-print(latex_dimensions)
+logger.info(latex_dimensions)
 
-with open(output_dimensions, "w", newline="") as csvfile:
-    csvfile.write(latex_dimensions)
+output_dimensions.write_text(latex_dimensions, newline="")
