@@ -5,9 +5,9 @@
     "-log=verbose",
     "-pretty",
     "--background-index",
-    "--compile-commands-dir=./opensim-cpp/build"
+    "--compile-commands-dir=./opensim_cpp/build"
   ],
   "clangd.checkUpdates": true,
-  "clangd.path": "./opensim-cpp/clangd-wrapper.sh",
+  "clangd.path": "./opensim_cpp/clangd-wrapper.sh",
   "python.defaultInterpreterPath": ".venv/bin/python"
 }
