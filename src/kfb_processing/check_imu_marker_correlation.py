@@ -31,6 +31,10 @@ TRC_FS = 100.0
 IMU_FS = 60.0
 # For Low Pass Filtering
 CUTOFF = 6.0
+# True order is 4 because forwards-backwards filtering
+ORDER = 2
+
+CHOP_SECONDS = 2
 
 PLOT_RESULTS = False
 
@@ -341,9 +345,9 @@ def plot_correlation(  # ruff: ignore[too-many-arguments, too-many-positional-ar
     lags: Any,  # ruff: ignore[any-type]
     best_corr: float,
     best_lag: float,
+    save_path: Path,
     raw_coords: Any | None = None,  # ruff: ignore[any-type]
     coords: Any | None = None,  # ruff: ignore[any-type]
-    save_path: str = "correlation_plot.png",
 ) -> None:
     fs = 60.0
     n = len(marker_signal)
@@ -401,7 +405,7 @@ def plot_correlation(  # ruff: ignore[too-many-arguments, too-many-positional-ar
     logger.info("Saved plot to: %s", save_path)
 
 
-def _calculate_single_trial(info: dict[str, Any], output_dir: Path, marker_name: str, imu_name: str) -> dict[str, Any]:  # ruff: ignore[too-many-locals]
+def _calculate_single_trial(info: dict[str, Any], output_dir: Path, marker_name: str, imu_name: str) -> dict[str, Any]:  # ruff: ignore[too-many-locals, too-many-statements]
     participant = info["participant"]
     trial_name = info["trial_name"]
     best_lag = 0
@@ -447,10 +451,16 @@ def _calculate_single_trial(info: dict[str, Any], output_dir: Path, marker_name:
         )
         imu_signal = imu_acc_norm(sto_accel, sto_ori, imu_name)
         n = min(len(marker_signal), len(imu_signal))
-        marker_signal = marker_signal[:n]
-        imu_signal = imu_signal[:n]
+        chop_samples = int(IMU_FS * CHOP_SECONDS)
 
+        start = chop_samples
+        end = n - chop_samples
         # align lengths
+        marker_signal = marker_signal[start:end]
+        imu_signal = imu_signal[start:end]
+
+        # Recalculate n
+        n = min(len(marker_signal), len(imu_signal))
         logger.info("Lengths: %d %d", len(marker_signal), len(imu_signal))
         # Normalized cross correlation
         logger.info("marker: %s", marker_signal.shape)
@@ -489,7 +499,7 @@ def _calculate_single_trial(info: dict[str, Any], output_dir: Path, marker_name:
                 best_lag,
                 coords=coords_downsample[:n],
                 raw_coords=raw_coords_downsample[:n],
-                save_path=output_dir / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
+                save_path=output_dir / "plots" / f"{participant}-{trial_name}-{marker_name}-{imu_name}-corr.png",
             )
     except Exception:
         logger.exception("ERROR: %s", info)
@@ -517,19 +527,19 @@ def _process_single_trial(participant: str, trial_name: str, info: dict[str, str
         trc,
         cutoff=CUTOFF,
         sampling_rate=TRC_FS,
-        order=4,
+        order=ORDER,
     )
     sto_accel = butter_lowpass_filter(
         sto_accel,
         cutoff=CUTOFF,
         sampling_rate=IMU_FS,
-        order=4,
+        order=ORDER,
     )
     sto_ori = butter_lowpass_filter(
         sto_ori,
         cutoff=CUTOFF,
         sampling_rate=IMU_FS,
-        order=4,
+        order=ORDER,
     )
 
     return {

@@ -16,41 +16,35 @@ if TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+NAN_THRESHOLD_PERCENT = 50.0
 
-PLOT_RESULTS = False
-
-SNR_THRESHOLD = 3.0
-
-PAIRS_TO_SELECT = 8
-
-EMG_SENSORS = {
-    # "trigger",
-    "LD_Right",
-    "ST_Left",
-    "LD_Left",
-    "VM_Left",
-    "RF_Left",
-    "VL_Right",
-    "VM_Right",
-    "BF_Left",
-    "VL_Left",
-    "RF_Right",
-    "ST_Right",
-    "BF_Right",
-    "GM_Right",
-    "GM_Left",
-    "TT_Left",
-    "DM_Left",
-    "TA_Left",
-    "TD_Left",
-    "TT_Right",
-    "DM_Right",
-    "TA_Right",
-    "TD_Right",
+KNOWN_TRIALS = {
+    # "static_cal",
+    # "dyn_sara",
+    "dyn_score_hip",
+    "dyn_score_ankle",
+    # "crouch_lift",
+    # "crouch_rotate",
+    # "curls",
+    "kettlebell",
+    "squats_deep",
+    "half_jacks",
+    "squat_jumps",
+    # "box_jabs",
+    # "box_combos",
+    # "chair_push_right",
+    # "chair_push_left",
+    # "arm_hang",
+    # "heavy_lift",
+    # "back_fly",
+    # "side_fly",
+    "walking",
+    "jogging",
+    # "crab_walking",
 }
 
 
-def main() -> None:
+def main() -> None:  # ruff: ignore[too-many-locals]
     # This makes a non-interactive backend to prevent memory leak
     # see https://github.com/matplotlib/matplotlib/issues/20300
     plt.switch_backend("agg")
@@ -79,10 +73,13 @@ def main() -> None:
     input_file = output_dir / "imu-marker-sync.csv"
     summary_df = pd.read_csv(input_file)
     top_corr = (
-        summary_df
-        .sort_values("best_corr", ascending=False)
-        .groupby(["participant", "trial"], group_keys=False)
-        .head(PAIRS_TO_SELECT)
+        summary_df.loc[
+            (summary_df["marker_len"] > 0.0)
+            & ~(summary_df["marker_nan_percent"] > NAN_THRESHOLD_PERCENT)
+            & ~(summary_df["marker_constant_percent"] > NAN_THRESHOLD_PERCENT)
+            & summary_df["trial"].isin(KNOWN_TRIALS)
+        ].sort_values("best_corr", ascending=False)
+        # .head(PAIRS_TO_SELECT)
     )
 
     # Aggregate statistics per participant across all trials
@@ -125,6 +122,8 @@ def main() -> None:
         {col: "{:.2f}" for col in summary_stats.columns[1:] if pd.api.types.is_numeric_dtype(summary_stats[col])},
     )
 
+    trials = list(KNOWN_TRIALS)
+    progfunc = r"\progfunc"
     latex = (
         summary_stats.style
         .format(fmt)
@@ -135,8 +134,13 @@ def main() -> None:
                 r" (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "The correlation values are unitless and bounded from 0 to 1. "
                 "The lag values are represented as frames from perfect alignment. "
-                "The 8 marker sensor pairs with the highest correlation are selected "
-                "for each trial to create the summary statistics. "
+                "The summary statistics presented here are aggregated from the trials "
+                f"{', '.join(f'{progfunc}{{{x}}}' for x in trials[:-1])}, and {progfunc}{{{trials[-1]}}}. "
+                "The remaining trials should be evaluated on a per-marker basis considering that"
+                " very low or high dynamic movement are more susceptible to marker tracking error or occlusion "
+                "and poor correlation does not necessarily indicate an alignment problem. "
+                r"The results for all trials individually are contained in the technical\_validation folder for further analysis. "  # ruff: ignore[line-too-long]
+                r"All marker-sensor pairs are included unless the marker is absent or occluded for over 50\% of the trial. "  # ruff: ignore[line-too-long]
                 "Further details for each individual trail can be found in ``imu-marker-sync.csv'' "
             ),
             label="tab:imu_marker_correlation_per_participant",
