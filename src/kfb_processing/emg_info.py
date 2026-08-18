@@ -39,7 +39,7 @@ df = pd.read_csv(input_file)
 
 # --- Table 1: Basic info ---
 rename_map = {
-    "label": "Sensor",
+    "#": r"\#",
     "side": "Side",
     "muscle": "Muscle",
     "sensor": "Sensor",
@@ -48,7 +48,7 @@ rename_map = {
 }
 num_participants = len(df)
 
-df = df.drop(["#", "id", "description"], axis=1)
+df = df.drop(["label", "id", "description"], axis=1)
 df["trial"] = df["trial"].map(lambda x: f"\\progfunc{{{x}}}")
 df = df.rename(columns=rename_map)
 
