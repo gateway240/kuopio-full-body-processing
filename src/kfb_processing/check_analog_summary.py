@@ -79,11 +79,6 @@ def main() -> None:
     exclude_cols = ["participant", "trial", "missing"]
     snr_cols = [c for c in summary_df.columns if c not in exclude_cols]
 
-    # Filter out SNRs below threshold
-    summary_df[snr_cols] = summary_df[snr_cols].map(
-        lambda x: x if x >= SNR_THRESHOLD else pd.NA,
-    )
-
     # Define a function to calculate stats per participant
     def calculate_participant_stats(group: pd.DataFrame) -> pd.Series:
         # Flatten all SNR columns into a 1D array and remove NaNs
@@ -135,7 +130,6 @@ def main() -> None:
                 "EMG signal-to-noise (SNR) ratio "
                 r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "All values are presented in decibels (dB). "
-                "Signal values below 3 dB are excluded from analysis in this table. "
                 "This table presents a summary of all trials available for a participant. "
                 "For more granular per-trial metrics, see the provided ``emg-snr.csv'' file. "
                 "The first second of the trial represents the noise baseline and the "
