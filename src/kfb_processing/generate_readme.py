@@ -158,14 +158,14 @@ optical_list = [
     "10 Vicon Vero cameras (Vicon Motion Systems Ltd, UK) at 1000 Hz",
     """2 OR6-7MA all-aluminum floor-embedded AMTI force platforms at 2400 Hz;
     Dimensions: 464 mm x 508 mm;
-    MA= "mini amp" AMTI's signal amplifier which is inside the force plates
+    MA= "mini amp" AMTI's signal amplifier which is inside the force platforms
     (Advanced Mechanical Technology, Inc., Watertown, Massachusetts, USA)""",
     """1 BMS464508HF-2K floor-embedded AMTI force platforms at 2400 Hz;
     Dimensions: 464 mm x 508 mm;
     HF= High Frequency with composite top
     (Advanced Mechanical Technology, Inc., Watertown, Massachusetts, USA)
     """,
-    """2 embedded force plates in a Motek M-gait Research split-belt treadmill
+    """2 embedded force platforms in a Motek M-gait Research split-belt treadmill
     (Motek Medical B.V., Amsterdam, Netherlands) at 2400 Hz""",
     "22 Delsys Wireless EMG sensors (describe below) at 2400 Hz",
 ]

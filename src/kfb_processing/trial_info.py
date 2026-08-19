@@ -73,8 +73,8 @@ latex_output = (
             "The repetitions [Reps] columns indicates the number of repetitions of the motion "
             "or time duration of the trial in the case of the TR category. "
             "The left foot [LF] and right foot [RF] columns "
-            "indicate which force plates were active under each foot during the trial. "
-            "A value of `-' indicates that a force plate was not active during the specific trial."
+            "indicate which force platforms were active under each foot during the trial. "
+            "A value of `-' indicates that a force platform was not active during the specific trial."
         ),
         label="tab:motion_trials",
         hrules=True,
