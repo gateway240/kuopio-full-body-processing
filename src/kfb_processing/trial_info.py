@@ -67,14 +67,14 @@ latex_output = (
         caption=(
             "The 22 motion trials for each participant, which can be grouped into the categories: "
             "(i)~calibration [CAL], (ii)~ergonomics and fitness [FIT], (iii)~boxing [BOX], "
-            "(iv)~maximal voluntary isometric contraction [MVIC], and (v)~treadmill exercises [TR]. "
+            "(iv)~reference activation [RA], and (v)~treadmill exercises [TR]. "
             "The optical motion capture [MC], IMU, and EMG columns, indicate (yes [y] or no [n]) whether the "
             "modality in present in the trial. "
             "The repetitions [Reps] columns indicates the number of repetitions of the motion "
             "or time duration of the trial in the case of the TR category. "
-            "The left force plate [LF] and right force plate [RF] columns "
-            "indicate which force plates were in use under each foot during the trial. "
-            "A value of `-' indicates that a force plate was not in use during the specific trial."
+            "The left foot [LF] and right foot [RF] columns "
+            "indicate which force plates were active under each foot during the trial. "
+            "A value of `-' indicates that a force plate was not active during the specific trial."
         ),
         label="tab:motion_trials",
         hrules=True,

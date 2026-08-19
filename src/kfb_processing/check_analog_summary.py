@@ -127,11 +127,10 @@ def main() -> None:
         .hide(axis="index")
         .to_latex(
             caption=(
-                "EMG signal-to-noise (SNR) ratio "
+                "EMG signal-to-noise (SNR) ratio summaries across all trials "
                 r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "All values are presented in decibels (dB). "
-                "This table presents a summary of all trials available for a participant. "
-                "For more granular per-trial metrics, see the provided ``emg-snr.csv'' file. "
+                "For more granular, per-trial metrics, see the provided ``emg-snr.csv'' file. "
                 "The first second of the trial represents the noise baseline and the "
                 "one second window in the trial with the largest amplitude represents the signal value. "
             ),
