@@ -43,22 +43,26 @@ rename_map = {
     "side": "Side",
     "muscle": "Muscle",
     "sensor": "Sensor",
-    "trial": "Trial",
+    "trial": "Reference Trial",
     "type": "Type",
 }
 num_participants = len(df)
 
-df = df.drop(["label", "id", "description"], axis=1)
 df["trial"] = df["trial"].map(lambda x: f"\\progfunc{{{x}}}")
+df["muscle"] = df.apply(lambda r: f"{r['description']} [{r['muscle']}]", axis=1)
+df = df.drop(["label", "id", "description", "sensor"], axis=1)
 df = df.rename(columns=rename_map)
 
-
-latex_output = df.to_latex(
-    index=False,
-    caption="EMG modalities",
-    label="tab:emg_info",
-    escape=False,
-    float_format="%d",
+latex_output = (
+    df.style
+    .format()
+    .hide(axis="index")
+    .to_latex(
+        caption="EMG modalities",
+        label="tab:emg_info",
+        hrules=True,
+        position_float="centering",
+    )
 )
-logger.info(latex_output)
+logger.info("\n%s", latex_output)
 output_path.write_text(latex_output, newline="")
