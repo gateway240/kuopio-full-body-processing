@@ -140,7 +140,7 @@ def main() -> None:  # ruff: ignore[too-many-locals]
                 " very low or high dynamic movement are more susceptible to marker tracking error or occlusion "
                 "and poor correlation does not necessarily indicate an alignment problem. "
                 r"The results for all trials individually are contained in the technical\_validation folder for further analysis. "  # ruff: ignore[line-too-long]
-                r"All marker-sensor pairs are included unless the marker is absent or occluded for over 50\% of the trial. "  # ruff: ignore[line-too-long]
+                r"All marker-sensor pairs are included unless the marker was absent or occluded for over 50\% of the trial. "  # ruff: ignore[line-too-long]
                 "Further details for each individual trail can be found in ``imu-marker-sync.csv'' "
             ),
             label="tab:imu_marker_correlation_per_participant",

@@ -132,7 +132,8 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
     for k, v in new_cols.items():
         df[k] = v
 
-    return df.apply(pd.to_numeric, errors="coerce")
+    result: pd.DataFrame = df.apply(pd.to_numeric, errors="coerce")
+    return result
 
 
 # ---------------------------
@@ -518,7 +519,7 @@ def main() -> None:
     logger.info(summary_df)
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
-    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(  # ty: ignore[invalid-argument-type]
+    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(
         output_file,
         index=False,
     )

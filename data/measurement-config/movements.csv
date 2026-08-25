@@ -18,6 +18,6 @@
 17,"heavy_lift","RA: Heavy object lift","RA","2x","n","y","y",3,2
 18,"back_fly","RA: Back Fly","RA","2x","n","y","y",3,2
 19,"side_fly","RA: Dumbbell side fly","RA","2x","n","y","y",3,2
-20,"walking ","Treadmill walk [0.5-1.2 m/s]","TR","60s","y","y","y",4,5
+20,"walking","Treadmill walk [0.5-1.2 m/s]","TR","60s","y","y","y",4,5
 21,"jogging","Treadmill jog [1.0-2.0 m/s]","TR","60s","y","y","y",4,5
 22,"crab_walking","Treadmill crab walk [0.1-0.4 m/s]","TR","60s","y","y","y",4,5

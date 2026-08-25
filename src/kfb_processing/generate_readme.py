@@ -80,10 +80,10 @@ class ReadmeBuilder:
         headers: list[str],
         tablefmt: str,
     ) -> str:
+        result: str = tabulate(rows, headers=headers, tablefmt=tablefmt)
         if self.format == "html":
-            # tabulate supports HTML format directly
-            return tabulate(rows, headers=headers, tablefmt="html")
-        return tabulate(rows, headers=headers, tablefmt=tablefmt) + "\n"
+            return result
+        return result + "\n"
 
     # --------------------------
     # Public API

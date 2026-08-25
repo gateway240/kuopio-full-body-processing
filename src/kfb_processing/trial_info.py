@@ -3,6 +3,7 @@ import logging
 from pathlib import Path
 
 import pandas as pd
+from pandas.io.formats.style import Styler
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -59,27 +60,25 @@ df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
 
 df = df.rename(columns=rename_map)
 
-latex_output = (
-    df.style
-    .format()
-    .hide(axis="index")
-    .to_latex(
-        caption=(
-            "The 22 motion trials for each participant, which can be grouped into the categories: "
-            "(i)~calibration [CAL], (ii)~ergonomics and fitness [FIT], (iii)~boxing [BOX], "
-            "(iv)~reference activation [RA], and (v)~treadmill exercises [TR]. "
-            "The optical motion capture [MC], IMU, and EMG columns, indicate (yes [y] or no [n]) whether the "
-            "modality in present in the trial. "
-            "The repetitions [Reps] columns indicates the number of repetitions of the motion "
-            "or time duration of the trial in the case of the TR category. "
-            "The left foot [LF] and right foot [RF] columns "
-            "indicate which force platforms were active under each foot during the trial. "
-            "A value of `-' indicates that a force platform was not active during the specific trial."
-        ),
-        label="tab:motion_trials",
-        hrules=True,
-        position_float="centering",
-    )
+styler = Styler(df)
+styler.format()
+styler.hide(axis="index")
+latex_output = styler.to_latex(
+    caption=(
+        "The 22 motion trials for each participant, which can be grouped into the categories: "
+        "(i)~calibration [CAL], (ii)~ergonomics and fitness [FIT], (iii)~boxing [BOX], "
+        "(iv)~reference activation [RA], and (v)~treadmill exercises [TR]. "
+        "The optical motion capture [MC], IMU, and EMG columns, indicate (yes [y] or no [n]) whether the "
+        "modality was present in the trial. "
+        "The repetitions [Reps] columns indicates the number of repetitions of the motion "
+        "or time duration of the trial in the case of the TR category. "
+        "The left foot [LF] and right foot [RF] columns "
+        "indicate which force platforms were active under each foot during the trial. "
+        "A blank value [-] indicates that a force platform was not active during the specific trial."
+    ),
+    label="tab:motion_trials",
+    hrules=True,
+    position_float="centering",
 )
 
 logger.info("\n%s", latex_output)

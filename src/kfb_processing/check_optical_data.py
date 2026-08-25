@@ -159,7 +159,8 @@ def read_opensim_marker_file(
     if isinstance(index_col, int):
         df = df.set_index(df.columns[index_col])
 
-    return df.apply(pd.to_numeric, errors="coerce")
+    result: pd.DataFrame = df.apply(pd.to_numeric, errors="coerce")
+    return result
 
 
 def get_last_packet_counter(data_lines: list[str]) -> int:

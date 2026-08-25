@@ -131,7 +131,8 @@ def _read_imu_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFr
     for k, v in new_cols.items():
         df[k] = v
 
-    return df.apply(pd.to_numeric, errors="coerce")
+    result: pd.DataFrame = df.apply(pd.to_numeric, errors="coerce")
+    return result
 
 
 def read_opensim_marker_file(
@@ -177,7 +178,8 @@ def read_opensim_marker_file(
         df = df.set_index(df.columns[index_col])
         df.index = df.index.astype(float)
 
-    return df.apply(pd.to_numeric, errors="coerce")
+    result: pd.DataFrame = df.apply(pd.to_numeric, errors="coerce")
+    return result
 
 
 # ---------------------------
@@ -301,7 +303,8 @@ def downsample(df: pd.DataFrame, target_fs: float) -> pd.DataFrame:
     df = df.copy()
     # logger.info(df.index)
     target_dt = pd.to_timedelta(1 / target_fs, unit="s")
-    return df.resample(rule=pd.to_timedelta(target_dt)).mean()
+    result: pd.DataFrame = df.resample(rule=pd.to_timedelta(target_dt)).mean()
+    return result
 
 
 def downsample_np(x: np.ndarray, target_fs: float, current_fs: float) -> np.ndarray:
