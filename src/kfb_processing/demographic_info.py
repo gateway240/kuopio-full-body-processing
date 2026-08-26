@@ -4,6 +4,8 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from pandas.io.formats.style import Styler
+from pandas.io.formats.style_render import ExtFormatter
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -48,7 +50,7 @@ def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFram
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
     range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")  # ruff: ignore[ambiguous-unicode-character-string]
-    return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
+    return pd.DataFrame([mean_row, sd_row, range_row], index=pd.Index(index_list))
 
 
 # --- Table 1: Basic anthropometrics ---
@@ -150,18 +152,31 @@ summary_transposed = summary_custom.T
 summary_transposed = summary_transposed.reset_index()
 summary_transposed = summary_transposed.rename(columns={"index": "Measurement"})
 
-latex_dimensions = summary_transposed.to_latex(
-    index=False,
+fmt: ExtFormatter = {summary_transposed.columns[0]: "{:s}"}  # first column as integer
+fmt.update(
+    dict.fromkeys(summary_transposed.columns[1:3], "{:.1f}"),
+)
+
+styler = Styler(summary_transposed)
+styler.format(fmt)
+styler.hide(axis="index")
+latex_dimensions = styler.to_latex(
     caption=(
         "Demographic and anthropometric measurements summary "
-        r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) statistics. "
+        r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) "
+        "statistics of the 13 participants (8 male and 5 female). "
+        "Anthropometric measurements were collected by identifying anatomical landmarks "
+        "with palpation and measuring with a soft measuring tape or small bone caliper. "
+        "Each participant wore their own symmetrical pair of shoes, and "
+        "the left and right foot length and width measurements are taken with shoes on. "
         "The abbreviations L and R indicate left and right, respectively."
     ),
     label="tab:demographic_anthropometric_stats",
-    escape=False,
-    float_format="%.1f",
+    hrules=True,
+    position_float="centering",
+    # float_format="%.1f",
 )
 
-logger.info(latex_dimensions)
+logger.info("\n%s", latex_dimensions)
 
 output_dimensions.write_text(latex_dimensions, newline="")

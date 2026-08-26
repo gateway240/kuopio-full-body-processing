@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
 import pandas as pd
+from pandas.io.formats.style import Styler
 
 if TYPE_CHECKING:
     from pandas.io.formats.style_render import ExtFormatter
@@ -48,7 +49,7 @@ EMG_SENSORS = {
 }
 
 
-def main() -> None:
+def main() -> None:  # ruff: ignore[too-many-locals]
     # This makes a non-interactive backend to prevent memory leak
     # see https://github.com/matplotlib/matplotlib/issues/20300
     plt.switch_backend("agg")
@@ -78,11 +79,6 @@ def main() -> None:
     summary_df = pd.read_csv(input_file)
     exclude_cols = ["participant", "trial", "missing"]
     snr_cols = [c for c in summary_df.columns if c not in exclude_cols]
-
-    # Filter out SNRs below threshold
-    summary_df[snr_cols] = summary_df[snr_cols].map(
-        lambda x: x if x >= SNR_THRESHOLD else pd.NA,
-    )
 
     # Define a function to calculate stats per participant
     def calculate_participant_stats(group: pd.DataFrame) -> pd.Series:
@@ -125,29 +121,22 @@ def main() -> None:
     fmt.update(
         {col: "{:.2f}" for col in summary_stats.columns[1:] if pd.api.types.is_numeric_dtype(summary_stats[col])},
     )
-
-    latex = (
-        summary_stats.style
-        .format(fmt)
-        .hide(axis="index")
-        .to_latex(
-            caption=(
-                "EMG signal-to-noise (SNR) ratio "
-                r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
-                "All values are presented in decibels (dB). "
-                "Signal values below 3 dB are excluded from analysis in this table. "
-                "This table presents a summary of all trials available for a participant. "
-                "For more granular per-trial metrics, see the provided ``emg-snr.csv'' file. "
-                "The first second of the trial represents the noise baseline and the "
-                "one second window in the trial with the largest amplitude represents the signal value. "
-            ),
-            label="tab:emg_snr_per_participant",
-            position_float="centering",
-            hrules=True,  # adds \toprule, \midrule, \bottomrule
-        )
+    styler = Styler(summary_stats)
+    styler.format(fmt)
+    styler.hide(axis="index")
+    latex = styler.to_latex(
+        caption=(
+            "EMG signal-to-noise (SNR) ratio summaries across all trials "
+            r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
+            "All values are presented in decibels (dB). "
+            "For more granular, per-trial metrics, see the provided ``emg-snr.csv'' file. "
+        ),
+        label="tab:emg_snr_per_participant",
+        position_float="centering",
+        hrules=True,  # adds \toprule, \midrule, \bottomrule
     )
 
-    logger.info(latex)
+    logger.info("\n%s", latex)
     output_file_latex = output_dir_latex / "emg-snr-per-participant.txt"
     output_file_latex.write_text(latex, encoding="utf-8", newline="")
 

@@ -26,7 +26,10 @@ PLOT_RESULTS = False
 # Sampling rate known for system
 ANALOG_FS = 2400
 
-WINDOW_SIZE = ANALOG_FS
+# Effectively 4th order with forwards-backwards
+ORDER = 2
+
+WINDOW_SIZE = ANALOG_FS * 1
 
 EMG_SENSORS = {
     # "trigger",
@@ -129,7 +132,8 @@ def _read_file_without_header(file_path: Path, sep: str = "\t") -> pd.DataFrame:
     for k, v in new_cols.items():
         df[k] = v
 
-    return df.apply(pd.to_numeric, errors="coerce")
+    result: pd.DataFrame = df.apply(pd.to_numeric, errors="coerce")
+    return result
 
 
 # ---------------------------
@@ -220,41 +224,134 @@ def butter_bandpass_filter(
 # ---------------------------
 # 4. SINGLE TRIAL PROCESSING
 # ---------------------------
+def compute_snr(  # ruff: ignore[complex-structure, too-many-branches, too-many-locals, too-many-statements]
+    signal: np.ndarray,
+    baseline_len: int,
+    window_size: int,
+    step: int = 200,
+) -> tuple[float, int]:
 
+    signal = np.asarray(signal, dtype=float)
 
-def compute_snr(signal: np.ndarray, baseline_len: int, window_size: int, step: int = 200) -> tuple[float, int]:
-    signal = np.asarray(signal)
-
-    if len(signal) < baseline_len:
-        msg = "Signal shorter than baseline length"
+    if len(signal) < baseline_len + window_size:
+        msg = "Signal too short for baseline and task windows"
         raise ValueError(msg)
 
-    # ---- BASELINE (NOISE) ----
-    baseline = signal[:baseline_len]
-    noise_power = np.mean(baseline**2)
+    if window_size > baseline_len:
+        msg_0 = "Window size larger than baseline length"
+        raise ValueError(msg_0)
 
-    best_start = 0
+    # Remove DC offset
+    signal -= np.mean(signal)
 
-    if noise_power == 0:
-        return 0, best_start
+    # ---------------------------------------------------------
+    # BASELINE / RESTING PERIOD
+    # ---------------------------------------------------------
+    baseline_powers = []
 
-    # ---- FIND WINDOW WITH MAX POWER ----
-    max_power = -np.inf
-
-    for start in range(baseline_len, len(signal) - window_size + 1, step):
+    for start in range(
+        0,
+        baseline_len - window_size + 1,
+        step,
+    ):
         window = signal[start : start + window_size]
-        power = np.mean(window**2)
 
-        if power > max_power:
-            max_power = power
-            best_start = start
+        if np.all(np.isfinite(window)):
+            baseline_powers.append(np.mean(window**2))
 
-    signal_power = max_power
+    if not baseline_powers:
+        msg = "No valid baseline windows"
+        raise ValueError(msg)
 
-    # ---- SNR ----
-    snr: float = 10 * np.log10(signal_power / noise_power)
+    # Robust estimate of noise power
+    noise_power = np.median(baseline_powers)
 
-    return snr, best_start
+    if noise_power <= 0 or not np.isfinite(noise_power):
+        msg_0 = "Invalid baseline noise power"
+        raise ValueError(msg_0)
+
+    # ---------------------------------------------------------
+    # FIND HIGHEST ACTIVATION
+    #
+    # Search after the first 2 seconds.
+    # Use windowed RMS/power to avoid finding a single
+    # noisy sample as the "highest activation".
+    # ---------------------------------------------------------
+    activation_powers = []
+    activation_starts = []
+
+    for start in range(
+        baseline_len,
+        len(signal) - window_size + 1,
+        step,
+    ):
+        window = signal[start : start + window_size]
+
+        if np.all(np.isfinite(window)):
+            activation_powers.append(np.mean(window**2))
+            activation_starts.append(start)
+
+    if not activation_powers:
+        msg = "No valid activation windows"
+        raise ValueError(msg)
+
+    activation_powers = np.asarray(activation_powers)
+    activation_starts = np.asarray(activation_starts)
+
+    # Location of highest activation
+    peak_idx = np.argmax(activation_powers)
+    peak_start = activation_starts[peak_idx]
+
+    # Center of the highest-activation window
+    peak_center = peak_start + window_size // 2
+
+    # ---------------------------------------------------------
+    # FIXED TASK WINDOW CENTERED ON PEAK ACTIVATION
+    # ---------------------------------------------------------
+    task_len = window_size
+
+    if task_len > len(signal):
+        msg_1 = "Task duration longer than signal"
+        raise ValueError(msg_1)
+
+    task_start = peak_center - task_len // 2
+    task_end = task_start + task_len
+
+    # Keep task window inside signal
+    if task_start < baseline_len:
+        task_start = baseline_len
+        task_end = task_start + task_len
+
+    if task_end > len(signal):
+        task_end = len(signal)
+        task_start = task_end - task_len
+
+    task_signal = signal[task_start:task_end]
+
+    if not np.all(np.isfinite(task_signal)):
+        msg = "Task window contains invalid values"
+        raise ValueError(msg)
+
+    # ---------------------------------------------------------
+    # TASK POWER
+    # ---------------------------------------------------------
+    task_power = np.mean(task_signal**2)
+
+    # Task power = EMG signal power + noise power
+    signal_power = task_power - noise_power
+
+    if signal_power <= 0:
+        msg = "Task power does not exceed baseline noise power"
+        raise ValueError(
+            msg,
+        )
+
+    # ---------------------------------------------------------
+    # SNR
+    # ---------------------------------------------------------
+    snr = 10 * np.log10(signal_power / noise_power)
+
+    return float(snr), int(task_start)
 
 
 def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, save_path) -> None:  # ruff: ignore[missing-type-function-argument, too-many-arguments, too-many-positional-arguments]
@@ -305,7 +402,7 @@ def _process_single_trial(participant: str, trial_name: str, info: Any) -> dict[
         emg_df,
         lowcut=50,
         highcut=500,
-        order=4,
+        order=ORDER,
     )
     return {
         "participant": participant,
@@ -329,13 +426,19 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
     baseline_size = WINDOW_SIZE
     window_size = WINDOW_SIZE
     for col in emg_df.columns:
-        snr, best_start = compute_snr(
-            emg_df[col].values,
-            baseline_size,
-            window_size,
-        )
-        snr_dict[col] = snr
-        best_windows[col] = best_start
+        try:
+            snr, best_start = compute_snr(
+                emg_df[col].values,
+                baseline_size,
+                window_size,
+            )
+
+            snr_dict[col] = snr
+            best_windows[col] = best_start
+
+        except (ValueError, FloatingPointError):
+            snr_dict[col] = np.nan
+            best_windows[col] = None
 
     if PLOT_RESULTS:
         save_path = output_dir / f"{participant}_{trial_name}_emg.png"
@@ -413,13 +516,10 @@ def main() -> None:
     summary_df = summary_df.map(
         lambda x: "" if isinstance(x, set) and len(x) == 0 else x,
     )
-    # fill NaN only in numeric columns
-    numeric_cols = summary_df.select_dtypes(include="number").columns
-    summary_df[numeric_cols] = summary_df[numeric_cols].fillna(0)
     logger.info(summary_df)
     output_file = output_dir / "emg-snr.csv"
     col = summary_df.columns[0]
-    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(  # ty: ignore[invalid-argument-type]
+    summary_df.assign(**{col: summary_df[col].map(lambda x: f"{int(x):02d}")}).to_csv(
         output_file,
         index=False,
     )

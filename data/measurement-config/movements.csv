@@ -10,14 +10,14 @@
 9,"squats_deep","Deep squats","FIT","5x","y","y","y",3,2
 10,"half_jacks","Half-jacks","FIT","10x","y","y","y",3,2
 11,"squat_jumps","Squat, jump, squat","FIT","3x","y","y","y",3,2
-12,"box_jabs","Boxing - lead fist jabs","BOX","10x","y","y","y",3,1
-13,"box_combos","Boxing - 1-2 combos","BOX","10x","y","y","y",3,1
-14,"chair_push_right","MVIC: Chair push right","MVIC","2x","n","y","y",0,0
-15,"chair_push_left","MVIC: Chair push left","MVIC","2x","n","y","y",0,0
-16,"arm_hang","MVIC: Flexed arm hang","MVIC","2x","n","y","y",0,0
-17,"heavy_lift","MVIC: Heavy object lift","MVIC","2x","n","y","y",3,2
-18,"back_fly","MVIC: Back Fly","MVIC","2x","n","y","y",3,2
-19,"side_fly","MVIC: Dumbbell side fly","MVIC","2x","n","y","y",3,2
-20,"walking ","Treadmill walk [0.5-1.2 m/s]","TR","60s","y","y","y",4,5
+12,"box_jabs","Boxing - lead fist jabs","BOX","10x","y","y","y","2/3",1
+13,"box_combos","Boxing - 1-2 combos","BOX","10x","y","y","y","2/3",1
+14,"chair_push_right","RA: Chair push right","RA","2x","n","y","y",0,0
+15,"chair_push_left","RA: Chair push left","RA","2x","n","y","y",0,0
+16,"arm_hang","RA: Flexed arm hang","RA","2x","n","y","y",0,0
+17,"heavy_lift","RA: Heavy object lift","RA","2x","n","y","y",3,2
+18,"back_fly","RA: Back Fly","RA","2x","n","y","y",3,2
+19,"side_fly","RA: Dumbbell side fly","RA","2x","n","y","y",3,2
+20,"walking","Treadmill walk [0.5-1.2 m/s]","TR","60s","y","y","y",4,5
 21,"jogging","Treadmill jog [1.0-2.0 m/s]","TR","60s","y","y","y",4,5
 22,"crab_walking","Treadmill crab walk [0.1-0.4 m/s]","TR","60s","y","y","y",4,5

@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from collections.abc import Hashable
 
     import scipy
+    from pandas.io.formats.style_render import ExtFormatter
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -120,11 +121,11 @@ def _process_single_file(participant: str, motion: str, f: Path, output_dir: Pat
         [
             pd.DataFrame(
                 quaternion_series_to_euler(df[col]),
-                columns=[
+                columns=pd.Index([
                     f"{col}_roll",
                     f"{col}_pitch",
                     f"{col}_yaw",
-                ],
+                ]),
                 index=df[col].dropna().index,
             )
             for col in df.columns
@@ -137,7 +138,7 @@ def _process_single_file(participant: str, motion: str, f: Path, output_dir: Pat
     # interleave
     summary = pd.DataFrame(
         np.column_stack([means, stds]).reshape(1, -1),
-        columns=[f"{c}_{stat}" for c in df_euler.columns for stat in ["mean", "std"]],
+        columns=pd.Index([f"{c}_{stat}" for c in df_euler.columns for stat in ["mean", "std"]]),
     )
     logger.info(summary)
     summary_dict = summary.iloc[0].to_dict()
@@ -244,7 +245,7 @@ def summary_table(df_subset: pd.DataFrame, index_list: list[str]) -> pd.DataFram
     mean_row = df_subset.mean().round(2)
     sd_row = df_subset.std().round(2)
     range_row = df_subset.apply(lambda x: f"{x.min():.1f}–{x.max():.1f}")  # ruff: ignore[ambiguous-unicode-character-string]
-    return pd.DataFrame([mean_row, sd_row, range_row], index=index_list)
+    return pd.DataFrame([mean_row, sd_row, range_row], index=pd.Index(index_list))
 
 
 def main() -> None:
@@ -324,23 +325,31 @@ def main() -> None:
         "yaw_delta": r"Z $\Delta$",
     }
 
-    summary_stats = summary_stats.rename(columns=rename_map)
+    summary_stats = summary_stats[list(rename_map.keys())].rename(columns=rename_map)
 
-    latex = summary_stats.to_latex(
-        index=False,
-        caption=(
-            r"IMU table test (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
-            "All values are presented in degrees (°). "
-            "X,Y, and Z represent roll, pitch, and yaw respectively. "
-            "Sensors were placed on a flat, non-metallic table with the same orientation "
-            "after being removed from the participant at the end of each data collection session."
-        ),
-        label="tab:imu_table_test_per_participant",
-        escape=False,
-        float_format="%.2f",
+    fmt: ExtFormatter = {
+        col: ("{:.2f}" if pd.api.types.is_numeric_dtype(summary_stats[col]) else "{:s}")
+        for col in summary_stats.columns[1:]
+    }
+
+    latex = (
+        summary_stats.style
+        .format(fmt)
+        .hide(axis="index")
+        .to_latex(
+            caption=(
+                r"IMU table test results (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "  # ruff: ignore[line-too-long]
+                "The X, Y, and Z values represent roll, pitch, and yaw in degrees (°) respectively. "
+                "Sensors were placed on a flat, non-metallic table with a uniform orientation "
+                "after being removed from each participant at the end of each data collection session."
+            ),
+            label="tab:imu_table_test_per_participant",
+            hrules=True,
+            position_float="centering",
+        )
     )
 
-    logger.info(latex)
+    logger.info("\n%s", latex)
     output_file_latex = output_dir_latex / "imu-table-test-per-participant.txt"
     output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
