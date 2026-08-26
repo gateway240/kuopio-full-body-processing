@@ -10,8 +10,8 @@
 9,"squats_deep","Deep squats","FIT","5x","y","y","y",3,2
 10,"half_jacks","Half-jacks","FIT","10x","y","y","y",3,2
 11,"squat_jumps","Squat, jump, squat","FIT","3x","y","y","y",3,2
-12,"box_jabs","Boxing - lead fist jabs","BOX","10x","y","y","y",3,1
-13,"box_combos","Boxing - 1-2 combos","BOX","10x","y","y","y",3,1
+12,"box_jabs","Boxing - lead fist jabs","BOX","10x","y","y","y","2/3",1
+13,"box_combos","Boxing - 1-2 combos","BOX","10x","y","y","y","2/3",1
 14,"chair_push_right","RA: Chair push right","RA","2x","n","y","y",0,0
 15,"chair_push_left","RA: Chair push left","RA","2x","n","y","y",0,0
 16,"arm_hang","RA: Flexed arm hang","RA","2x","n","y","y",0,0

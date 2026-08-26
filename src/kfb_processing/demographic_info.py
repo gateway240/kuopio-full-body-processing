@@ -167,7 +167,7 @@ latex_dimensions = styler.to_latex(
         "statistics of the 13 participants (8 male and 5 female). "
         "Anthropometric measurements were collected by identifying anatomical landmarks "
         "with palpation and measuring with a soft measuring tape or small bone caliper. "
-        "Each participant wore their own same-sized, symmetrical pair of shoes throughout the motion trials, and "
+        "Each participant wore their own symmetrical pair of shoes, and "
         "the left and right foot length and width measurements are taken with shoes on. "
         "The abbreviations L and R indicate left and right, respectively."
     ),

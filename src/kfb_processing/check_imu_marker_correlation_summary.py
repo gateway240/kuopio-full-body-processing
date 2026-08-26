@@ -134,14 +134,10 @@ def main() -> None:  # ruff: ignore[too-many-locals]
                 r" (mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
                 "The correlation values are unitless and bounded from 0 to 1. "
                 "The lag values are represented as frames from perfect alignment. "
-                "The summary statistics presented here are aggregated from the trials "
-                f"{', '.join(f'{progfunc}{{{x}}}' for x in trials[:-1])}, and {progfunc}{{{trials[-1]}}}. "
-                "The remaining trials should be evaluated on a per-marker basis considering that"
-                " very low or high dynamic movement are more susceptible to marker tracking error or occlusion "
-                "and poor correlation does not necessarily indicate an alignment problem. "
-                r"The results for all trials individually are contained in the technical\_validation folder for further analysis. "  # ruff: ignore[line-too-long]
                 r"All marker-sensor pairs are included unless the marker was absent or occluded for over 50\% of the trial. "  # ruff: ignore[line-too-long]
-                "Further details for each individual trail can be found in ``imu-marker-sync.csv'' "
+                "These summary values are aggregated from the trials "
+                f"{', '.join(f'{progfunc}{{{x}}}' for x in trials[:-1])}, and {progfunc}{{{trials[-1]}}}. "
+                "The results for each individual trial are contained in the `imu-marker-sync.csv'' file for further analysis. "  # ruff: ignore[line-too-long]
             ),
             label="tab:imu_marker_correlation_per_participant",
             position_float="centering",
@@ -149,7 +145,7 @@ def main() -> None:  # ruff: ignore[too-many-locals]
         )
     )
 
-    logger.info(latex)
+    logger.info("\n%s", latex)
     output_file_latex = output_dir_latex / "imu-marker-correlation-per-participant.txt"
     output_file_latex.write_text(latex, encoding="utf-8", newline="")
 
