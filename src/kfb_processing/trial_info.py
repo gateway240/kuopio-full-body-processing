@@ -55,8 +55,8 @@ num_participants = len(df)
 
 df = df.drop("description", axis=1)
 df["label"] = df["label"].map(lambda x: f"\\progfunc{{{x}}}")
-df["fp_l"] = df["fp_l"].map(lambda x: "-" if x == 0 else x)
-df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
+# df["fp_l"] = df["fp_l"].map(lambda x: "-" if x == 0 else x)
+# df["fp_r"] = df["fp_r"].map(lambda x: "-" if x == 0 else x)
 
 df = df.rename(columns=rename_map)
 
@@ -73,8 +73,8 @@ latex_output = styler.to_latex(
         "The repetitions [Reps] columns indicates the number of repetitions of the motion "
         "or time duration of the trial in the case of the TR category. "
         "The left foot [LF] and right foot [RF] columns "
-        "indicate which force platforms were active under each foot during the trial. "
-        "A blank value [-] indicates that a force platform was not active during the specific trial."
+        "indicate which force platforms (FP) were active under each foot during the trial. "
+        "A value of 0 indicates that a force platform was not active during the specific trial."
     ),
     label="tab:motion_trials",
     hrules=True,

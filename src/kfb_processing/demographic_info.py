@@ -168,7 +168,7 @@ latex_dimensions = styler.to_latex(
         "Anthropometric measurements were collected by identifying anatomical landmarks "
         "with palpation and measuring with a soft measuring tape or small bone caliper. "
         "Each participant wore their own symmetrical pair of shoes, and "
-        "the left and right foot length and width measurements are taken with shoes on. "
+        "the left and right foot length and width measurements were taken with shoes on. "
         "The abbreviations L and R indicate left and right, respectively."
     ),
     label="tab:demographic_anthropometric_stats",
