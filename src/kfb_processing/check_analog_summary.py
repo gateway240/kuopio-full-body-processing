@@ -126,7 +126,7 @@ def main() -> None:  # ruff: ignore[too-many-locals]
     styler.hide(axis="index")
     latex = styler.to_latex(
         caption=(
-            "EMG signal-to-noise (SNR) ratio summaries across all trials "
+            "EMG signal-to-noise  ratio (SNR) summaries across all trials "
             r"(mean $\mu$, standard deviation $\sigma$, and range $\Delta$) for each participant (\#). "
             "All values are presented in decibels (dB). "
             "For more granular, per-trial metrics, see the provided ``emg-snr.csv'' file. "
