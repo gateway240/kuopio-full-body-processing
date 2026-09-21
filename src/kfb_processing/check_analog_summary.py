@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import logging
 import pathlib
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 from pandas.io.formats.style import Styler
 
@@ -77,13 +79,25 @@ def main() -> None:  # ruff: ignore[too-many-locals]
 
     input_file = output_dir / "emg-snr.csv"
     summary_df = pd.read_csv(input_file)
-    exclude_cols = ["participant", "trial", "missing"]
+    exclude_cols = {"participant", "trial", "missing", "flat", "saturated"}
     snr_cols = [c for c in summary_df.columns if c not in exclude_cols]
 
     # Define a function to calculate stats per participant
     def calculate_participant_stats(group: pd.DataFrame) -> pd.Series:
         # Flatten all SNR columns into a 1D array and remove NaNs
-        values = group[snr_cols].to_numpy().flatten()
+        values = []
+        for _, row in group.iterrows():
+            # print(row)
+            flat = row.get("flat")
+            saturated = row.get("saturated")
+            flat = ast.literal_eval(flat) if type(flat) is str else set()
+            saturated = ast.literal_eval(saturated) if type(saturated) is str else set()
+            excluded = flat | saturated | exclude_cols
+
+            valid_cols = [col for col in snr_cols if col not in excluded]
+
+            values.append(row[valid_cols].to_numpy())
+        values = np.concatenate(values)
         values = values[~pd.isna(values)]
 
         # Compute mean, std, and range
