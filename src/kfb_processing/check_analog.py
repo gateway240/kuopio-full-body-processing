@@ -9,7 +9,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, find_peaks
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -388,21 +388,28 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
 ANALOG_THRESHOLD = 0.1
 
 
-def compute_saturated(signal: np.ndarray) -> tuple[bool, bool]:
+def compute_saturated(signal: np.ndarray) -> tuple[bool, bool]:  # ruff: ignore[too-many-locals]
     s = np.asarray(signal, dtype=np.float64)
     s_mean = np.nanmean(s)
     s_var = np.nanvar(s)
-    # peaks, _ = find_peaks(s, height=0)
-    # valleys, _ = find_peaks(s * -1, height=0)
+    peaks, _ = find_peaks(s, height=0)
+    valleys, _ = find_peaks(-s, height=0)
 
-    # num_peaks = 3
-    # s_max = np.average(s[peaks[0:num_peaks]])
-    # s_min = np.average(s[valleys[0:num_peaks]])
-    s_min = min(s)
-    s_max = max(s)
+    # Indices of the n highest peaks and lowest valleys
+    num_values = 5
+    top_peaks = peaks[np.argsort(s[peaks])[-num_values:]]
+    top_valleys = valleys[np.argsort(s[valleys])[:num_values]]
+
+    peak_values = s[top_peaks]
+    valley_values = s[top_valleys]
+
+    s_max = np.mean(peak_values)
+    s_min = np.mean(valley_values)
+    # s_min = min(s)
+    # s_max = max(s)
     diff = abs(s_max - s_min)
     logger.info("Saturated max: %f min: %f diff: %f mean: %f var: %f", s_max, s_min, diff, s_mean, s_var)
-    flat = bool(s_max < ANALOG_THRESHOLD) and bool(s_min < -ANALOG_THRESHOLD)
+    flat = (bool(s_max < ANALOG_THRESHOLD) and bool(s_min < -ANALOG_THRESHOLD)) or bool(diff < 2 * ANALOG_THRESHOLD)
     saturated = bool(s_mean > (1 - ANALOG_THRESHOLD) * s_max)
     return (flat, saturated)
 
