@@ -56,7 +56,7 @@ To begin, you must define the desired input and output base directories for proc
 
 ```bash
 export INPUT_PATH=~/data/kuopio-full-body-dataset
-export OUTPUT_PATH=~/data/kuopio-full-body-dataset
+export OUTPUT_PATH=~/data/kuopio-full-body-dataset-subset
 ```
 
 Both directories can be the same, if you would like the processing results to be

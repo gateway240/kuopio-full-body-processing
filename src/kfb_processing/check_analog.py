@@ -385,10 +385,10 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
     logger.info("Saved EMG plot to: %s", save_path)
 
 
-ANALOG_THRESHOLD = 0.1
+ANALOG_THRESHOLD = 0.9
 
 
-def compute_saturated(signal: np.ndarray) -> tuple[bool, bool]:  # ruff: ignore[too-many-locals]
+def compute_saturated(signal: np.ndarray) -> bool:  # ruff: ignore[too-many-locals]
     s = np.asarray(signal, dtype=np.float64)
     s_mean = np.nanmean(s)
     s_var = np.nanvar(s)
@@ -405,13 +405,11 @@ def compute_saturated(signal: np.ndarray) -> tuple[bool, bool]:  # ruff: ignore[
 
     s_max = np.mean(peak_values)
     s_min = np.mean(valley_values)
-    # s_min = min(s)
-    # s_max = max(s)
+    s_min_abs = min(s)
+    s_max_abs = max(s)
     diff = abs(s_max - s_min)
     logger.info("Saturated max: %f min: %f diff: %f mean: %f var: %f", s_max, s_min, diff, s_mean, s_var)
-    flat = (bool(s_max < ANALOG_THRESHOLD) and bool(s_min < -ANALOG_THRESHOLD)) or bool(diff < 2 * ANALOG_THRESHOLD)
-    saturated = bool(s_mean > (1 - ANALOG_THRESHOLD) * s_max)
-    return (flat, saturated)
+    return bool(s_max > s_max_abs * ANALOG_THRESHOLD) and bool(s_min < s_min_abs * ANALOG_THRESHOLD)
 
 
 def _process_single_trial(participant: str, trial_name: str, info: Any) -> dict[str, Any]:  # ruff: ignore[any-type]
@@ -442,7 +440,7 @@ def _process_single_trial(participant: str, trial_name: str, info: Any) -> dict[
     }
 
 
-def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # ruff: ignore[any-type, too-many-locals]
+def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # ruff: ignore[any-type]
     snr_dict = {}
 
     participant = info["participant"]
@@ -455,7 +453,6 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
     baseline_size = WINDOW_SIZE
     window_size = WINDOW_SIZE
 
-    flat_set = set()
     saturated_set = set()
 
     for col in emg_df.columns:
@@ -467,9 +464,7 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
                 baseline_size,
                 window_size,
             )
-            flat, saturated = compute_saturated(signal)
-            if flat:
-                flat_set.add(col)
+            saturated = compute_saturated(signal)
             if saturated:
                 saturated_set.add(col)
 
@@ -496,7 +491,6 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
         "trial": trial_name,
         **snr_dict,
         "missing": missing,
-        "flat": flat_set,
         "saturated": saturated_set,
     }
 
