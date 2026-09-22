@@ -89,12 +89,10 @@ def main() -> None:  # ruff: ignore[too-many-locals]
         for _, row in group.iterrows():
             # print(row)
             missing = row.get("missing")
-            flat = row.get("flat")
             saturated = row.get("saturated")
             missing = ast.literal_eval(missing) if type(missing) is str else set()
-            flat = ast.literal_eval(flat) if type(flat) is str else set()
             saturated = ast.literal_eval(saturated) if type(saturated) is str else set()
-            excluded = flat | saturated | missing | exclude_cols
+            excluded = saturated | missing | exclude_cols
 
             valid_cols = [col for col in snr_cols if col not in excluded]
 
