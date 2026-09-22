@@ -9,7 +9,7 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from scipy.signal import butter, filtfilt
+from scipy.signal import butter, filtfilt, find_peaks
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -385,6 +385,41 @@ def plot_emg_signals(df, snr_dict, best_windows, baseline_size, window_size, sav
     logger.info("Saved EMG plot to: %s", save_path)
 
 
+ANALOG_THRESHOLD = 0.1
+
+
+def compute_saturated(signal: np.ndarray) -> bool:  # ruff: ignore[too-many-locals]
+    s = np.asarray(signal, dtype=np.float64)
+    s_mean = np.nanmean(s)
+    s_var = np.nanvar(s)
+    min_distance = 100
+    peaks, _ = find_peaks(s, height=0, distance=min_distance)
+    valleys, _ = find_peaks(-s, height=0, distance=min_distance)
+
+    # Indices of the n highest peaks and lowest valleys
+    num_values = 10
+    top_peaks = peaks[np.argsort(s[peaks])[-num_values:]]
+    top_valleys = valleys[np.argsort(s[valleys])[:num_values]]
+
+    peak_values = s[top_peaks]
+    valley_values = s[top_valleys]
+
+    s_max = np.mean(peak_values)
+    s_min = np.mean(valley_values)
+    s_min_abs = min(s)
+    s_max_abs = max(s)
+    s_range = s_max_abs - s_min_abs
+    diff = abs(s_max - s_min)
+    low_margin = s_range * ANALOG_THRESHOLD
+    high_margin = s_range * ANALOG_THRESHOLD
+
+    near_low = s_min <= s_min_abs + low_margin
+    near_high = s_max >= s_max_abs - high_margin
+
+    logger.info("Saturated max: %f min: %f diff: %f mean: %f var: %f", s_max, s_min, diff, s_mean, s_var)
+    return bool(near_low and near_high)
+
+
 def _process_single_trial(participant: str, trial_name: str, info: Any) -> dict[str, Any]:  # ruff: ignore[any-type]
 
     analog = _read_file_without_header(Path(info["analog"]))
@@ -425,13 +460,21 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
 
     baseline_size = WINDOW_SIZE
     window_size = WINDOW_SIZE
+
+    saturated_set = set()
+
     for col in emg_df.columns:
-        try:
+        try:  # ruff: ignore[too-many-statements-in-try-clause]
+            logger.info("Col: %s", col)
+            signal = emg_df[col].to_numpy()
             snr, best_start = compute_snr(
-                emg_df[col].values,
+                signal,
                 baseline_size,
                 window_size,
             )
+            saturated = compute_saturated(signal)
+            if saturated:
+                saturated_set.add(col)
 
             snr_dict[col] = snr
             best_windows[col] = best_start
@@ -456,6 +499,7 @@ def _calculate_single_trial(info: Any, output_dir: Path) -> dict[str, Any]:  # r
         "trial": trial_name,
         **snr_dict,
         "missing": missing,
+        "saturated": saturated_set,
     }
 
 
