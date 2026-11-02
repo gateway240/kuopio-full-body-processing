@@ -62,7 +62,8 @@ RUN cmake . -B ./build \
   -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
   && cmake --build ./build \
     --config Release \
-    --parallel
+    # Use 3/4 of available processing power
+    --parallel $((`nproc` * 3 /  4))
 
 # Install opensim-core
 RUN cmake --build ./build --target install
