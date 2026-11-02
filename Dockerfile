@@ -47,7 +47,7 @@ RUN cmake -S ./dependencies -B ./dependencies/build \
 # Configure and build opensim-core
 RUN cmake . -B ./build \
   -DOPENSIM_DEPENDENCIES_DIR=./dependencies/install \
-  -DCMAKE_INSTALL_PREFIX=~/opensim-core \
+  -DCMAKE_INSTALL_PREFIX=/opt/opensim-core \
   -Dezc3d_DIR=./dependencies/install/ezc3d/lib64/cmake/ezc3d \
   -DBUILD_JAVA_WRAPPING=off \
   -DBUILD_PYTHON_WRAPPING=off \
@@ -68,10 +68,32 @@ RUN cmake . -B ./build \
 # Install opensim-core
 RUN cmake --build ./build --target install
 
-ENV LD_LIBRARY_PATH="/opensim/dependencies/install/ezc3d/lib64:/root/opensim-core/sdk/lib"
+# --------------------------------------------------------------------------
+# Create user matching host UID/GID
+# --------------------------------------------------------------------------
 
-COPY ./opensim_cpp /root/opensim_cpp
+ARG UID=1000
+ARG GID=1000
 
-WORKDIR /root/opensim_cpp
+RUN groupadd -g ${GID} opensim \
+    && useradd -m -u ${UID} -g ${GID} -s /bin/bash opensim
+
+# --------------------------------------------------------------------------
+# Workspace
+# --------------------------------------------------------------------------
+
+RUN mkdir -p /workspace \
+    && chown -R opensim:opensim \
+        /workspace \
+        /opensim \
+        /opt/opensim-core
+
+COPY --chown=opensim:opensim ./opensim_cpp /workspace/opensim_cpp
+
+WORKDIR /workspace/opensim_cpp
+
+ENV LD_LIBRARY_PATH=/opensim/dependencies/install/ezc3d/lib64:/opt/opensim-core/sdk/lib
+
+USER opensim
 
 CMD ["/bin/bash"]
