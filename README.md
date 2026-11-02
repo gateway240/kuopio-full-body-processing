@@ -38,12 +38,19 @@ To setup the Docker container:
 1. [Install Docker](https://docs.docker.com/get-started/get-docker/) and start Docker.
 2. Build the development container (this may take some time depending on your machine's power):
 ```bash
-docker build . -t kfb-opensim-cpp
+docker build  \
+    --build-arg UID=$(id -u) \
+    --build-arg GID=$(id -g) \
+    . -t kfb-opensim-cpp
 ```
 3. Start the development container. You will now have a shell into the container
 where the OpenSim dependencies and environment is configured:
 ```bash
-docker run -it -v ~/data:/root/data -v ./opensim_cpp:/root/opensim_cpp kfb-opensim-cpp
+    # --user $(id -u):$(id -g) \
+docker run -it \
+    -v "$PWD/opensim_cpp:/workspace/opensim_cpp" \
+    -v "$HOME/data:/home/opensim/data" \
+    kfb-opensim-cpp
 ```
 *NOTE*: The Docker volume mount syntax is
 `-v <host_path>:<container_path>`. The `~/data:/root/data` mount is so you can process
@@ -56,7 +63,7 @@ To begin, you must define the desired input and output base directories for proc
 
 ```bash
 export INPUT_PATH=~/data/kuopio-full-body-dataset
-export OUTPUT_PATH=~/data/kuopio-full-body-dataset
+export OUTPUT_PATH=~/data/kuopio-full-body-dataset-results
 ```
 
 Both directories can be the same, if you would like the processing results to be
@@ -130,7 +137,7 @@ To run processing:
 ```
 2. Run the project (ensuring `OUTPUT_PATH` is defined):
 ```bash
-./main "$OUTPUT_PATH/s02_extracted" "$OUTPUT_PATH/s03_aligned" 2>&1 | tee "output_$(date +%Y%m%d_%H%M%S).txt"
+./main "$INPUT_PATH/s02_extracted" "$INPUT_PATH/s02_extracted"  "$OUTPUT_PATH/s03_aligned"  2>&1 | tee "output_$(date +%Y%m%d_%H%M%S).txt"
 ```
 Investigate if match doesn't exist (e.g. IMU wasn't recorded).
 

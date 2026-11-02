@@ -112,7 +112,7 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
 }
 
 // Process a single trial
-void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
+void processTrial(const fs::path &analogFile, const fs::path &mocapRoot, const fs::path &imuRoot,
                   const fs::path &newRoot) {
   std::cout << "Processing: " << analogFile << std::endl;
 
@@ -123,24 +123,24 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
     return;
   }
   trialName = trialName.substr(0, trialName.find("_analog"));
-
   // Derive full paths
   fs::path numberDir = analogFile.parent_path().parent_path();
   // std::cout << numberDir << std::endl;
-  fs::path imuDir = numberDir / "imu";
-  fs::path mocapDir = numberDir / "mocap";
+  fs::path imuDir = imuRoot / numberDir.filename() / "imu";
+  fs::path mocapDir = newRoot.parent_path() / mocapRoot.filename() / numberDir.filename();
 
   fs::path orientationsFile = imuDir / (trialName + "_orientations.sto");
   fs::path accelerationsFile = imuDir / (trialName + "_accelerations.sto");
-  fs::path grfFile = mocapDir / (trialName + "_grfs.sto");
+  fs::path grfFile = mocapDir / (trialName + "_grfs_custom.sto");
   fs::path markerFile = mocapDir / (trialName + "_markers.trc");
+  std::cout << "Marker file: " << markerFile.string() << std::endl;
 
   // Output paths
 
   // Helper lambda to swap original root for newRoot
   auto makeOutPath = [&](const fs::path &fullPath) {
-    fs::path rel = fs::relative(fullPath, numberDir.parent_path());
-    return newRoot / rel;
+    // fs::path rel = fs::relative(fullPath, numberDir.parent_path());
+    return newRoot / numberDir.filename() / fullPath.filename();
   };
 
   // Output paths with "extracted" replaced by "aligned"
@@ -151,7 +151,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   fs::path outMarker = makeOutPath(markerFile);
 
   if (!fs::exists(orientationsFile) || !fs::exists(accelerationsFile)) {
-    std::cerr << "Missing IMU files for trial: " << trialName << std::endl;
+    std::cerr << "Missing IMU files for trial: " << orientationsFile << std::endl;
     return;
   }
 
@@ -269,7 +269,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
                                         markerEnd);
 }
 
-void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
+void processDirectory(const fs::path &mocapRoot, const fs::path &imuRoot, const fs::path &newRoot,
                       const unsigned &maxThreads =
                           std::max(1u, std::thread::hardware_concurrency())) {
   std::cout << "Processing with max threads: " << maxThreads << std::endl;
@@ -277,7 +277,7 @@ void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
   std::vector<std::future<void>> futures;
 
   for (const auto &entry : fs::recursive_directory_iterator(
-           originalRoot, fs::directory_options::skip_permission_denied)) {
+           mocapRoot, fs::directory_options::skip_permission_denied)) {
 
     if (!entry.is_regular_file())
       continue;
@@ -293,9 +293,9 @@ void processDirectory(const fs::path &originalRoot, const fs::path &newRoot,
 
       sem.acquire();
       futures.emplace_back(
-          std::async(std::launch::async, [path, originalRoot, newRoot, &sem]() {
+          std::async(std::launch::async, [path, mocapRoot, imuRoot, newRoot, &sem]() {
             try {
-              processTrial(path, originalRoot, newRoot);
+              processTrial(path, mocapRoot, imuRoot, newRoot);
             } catch (const std::exception &e) {
               std::cerr << "Error processing " << path << ": " << e.what()
                         << std::endl;
@@ -320,13 +320,20 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  fs::path directoryPath = argv[1];
-  if (!fs::exists(directoryPath) || !fs::is_directory(directoryPath)) {
+  fs::path mocapDirectoryPath = argv[1];
+  if (!fs::exists(mocapDirectoryPath) || !fs::is_directory(mocapDirectoryPath)) {
     std::cerr << "The provided path is not a valid directory." << std::endl;
     return 1;
   }
 
-  fs::path outputPath = argv[2];
+  fs::path imuDirectoryPath = argv[2];
+  if (!fs::exists(imuDirectoryPath) || !fs::is_directory(imuDirectoryPath)) {
+    std::cerr << "The provided path is not a valid directory." << std::endl;
+    return 1;
+  }
+
+
+  fs::path outputPath = argv[3];
   if (!std::filesystem::exists(outputPath)) {
     // Create the directory
     if (std::filesystem::create_directories(outputPath)) {
@@ -336,7 +343,7 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  processDirectory(directoryPath, outputPath, MAX_THREADS);
+  processDirectory(mocapDirectoryPath, imuDirectoryPath, outputPath, MAX_THREADS);
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
   std::cout << "Runtime = "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
