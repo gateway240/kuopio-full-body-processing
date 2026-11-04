@@ -46,11 +46,12 @@ docker build  \
 3. Start the development container. You will now have a shell into the container
 where the OpenSim dependencies and environment is configured:
 ```bash
-    # --user $(id -u):$(id -g) \
 docker run -it \
     -v "$PWD/opensim_cpp:/workspace/opensim_cpp" \
     -v "$HOME/data:/home/opensim/data" \
+    --name kfb-opensim-cpp \
     kfb-opensim-cpp
+docker start kfb-opensim-cpp && docker exec -it kfb-opensim-cpp /bin/zsh
 ```
 *NOTE*: The Docker volume mount syntax is
 `-v <host_path>:<container_path>`. The `~/data:/root/data` mount is so you can process
