@@ -30,7 +30,7 @@ RUN dnf install -y \
     && rm -rf /var/cache/dnf
 
 # Download OpenSim source
-ARG OSIM_COMMIT="836d8cd652db57bdedf2c2190b31827df91ea226"
+ARG OSIM_COMMIT="8f1e274f8221d74052cc190899078dca3db623d8"
 RUN mkdir /opensim \
     && curl -SL https://github.com/gateway240/opensim-core/archive/${OSIM_COMMIT}.tar.gz \
     | tar xzf - -C /opensim --strip-components=1
