@@ -89,9 +89,9 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   // CANNOT use table.trim because it uses the "next" time.
   // we need the closest time to avoid the off by 1 issue
   table.trimToIndices(start_index, end_index);
-  const auto& t0 = table.getIndependentColumn().front();
-  const auto &length = table.getNumRows();
-  const auto &ind_col = table.getIndependentColumn();
+  const auto t0 = table.getIndependentColumn().front();
+  const auto length = table.getNumRows();
+  const auto ind_col = table.getIndependentColumn();
   for (size_t i = 0; i < length; ++i) {
     table.setIndependentValueAtIndex(i, ind_col[i] - t0);
   }
@@ -112,8 +112,8 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
 }
 
 // Process a single trial
-void processTrial(const fs::path &analogFile, const fs::path &mocapRoot, const fs::path &imuRoot,
-                  const fs::path &newRoot) {
+void processTrial(const fs::path &analogFile, const fs::path &mocapRoot,
+                  const fs::path &imuRoot, const fs::path &newRoot) {
   std::cout << "Processing: " << analogFile << std::endl;
 
   // Get trial name
@@ -127,7 +127,8 @@ void processTrial(const fs::path &analogFile, const fs::path &mocapRoot, const f
   fs::path numberDir = analogFile.parent_path().parent_path();
   // std::cout << numberDir << std::endl;
   fs::path imuDir = imuRoot / numberDir.filename() / "imu";
-  fs::path mocapDir = newRoot.parent_path() / mocapRoot.filename() / numberDir.filename();
+  fs::path mocapDir =
+      newRoot.parent_path() / mocapRoot.filename() / numberDir.filename();
 
   fs::path orientationsFile = imuDir / (trialName + "_orientations.sto");
   fs::path accelerationsFile = imuDir / (trialName + "_accelerations.sto");
@@ -151,7 +152,8 @@ void processTrial(const fs::path &analogFile, const fs::path &mocapRoot, const f
   fs::path outMarker = makeOutPath(markerFile);
 
   if (!fs::exists(orientationsFile) || !fs::exists(accelerationsFile)) {
-    std::cerr << "Missing IMU files for trial: " << orientationsFile << std::endl;
+    std::cerr << "Missing IMU files for trial: " << orientationsFile
+              << std::endl;
     return;
   }
 
@@ -269,7 +271,8 @@ void processTrial(const fs::path &analogFile, const fs::path &mocapRoot, const f
                                         markerEnd);
 }
 
-void processDirectory(const fs::path &mocapRoot, const fs::path &imuRoot, const fs::path &newRoot,
+void processDirectory(const fs::path &mocapRoot, const fs::path &imuRoot,
+                      const fs::path &newRoot,
                       const unsigned &maxThreads =
                           std::max(1u, std::thread::hardware_concurrency())) {
   std::cout << "Processing with max threads: " << maxThreads << std::endl;
@@ -292,8 +295,8 @@ void processDirectory(const fs::path &mocapRoot, const fs::path &imuRoot, const 
     if (ext == ".sto" && name.find("_analog") != std::string::npos) {
 
       sem.acquire();
-      futures.emplace_back(
-          std::async(std::launch::async, [path, mocapRoot, imuRoot, newRoot, &sem]() {
+      futures.emplace_back(std::async(
+          std::launch::async, [path, mocapRoot, imuRoot, newRoot, &sem]() {
             try {
               processTrial(path, mocapRoot, imuRoot, newRoot);
             } catch (const std::exception &e) {
@@ -321,7 +324,8 @@ int main(int argc, char *argv[]) {
   }
 
   fs::path mocapDirectoryPath = argv[1];
-  if (!fs::exists(mocapDirectoryPath) || !fs::is_directory(mocapDirectoryPath)) {
+  if (!fs::exists(mocapDirectoryPath) ||
+      !fs::is_directory(mocapDirectoryPath)) {
     std::cerr << "The provided path is not a valid directory." << std::endl;
     return 1;
   }
@@ -331,7 +335,6 @@ int main(int argc, char *argv[]) {
     std::cerr << "The provided path is not a valid directory." << std::endl;
     return 1;
   }
-
 
   fs::path outputPath = argv[3];
   if (!std::filesystem::exists(outputPath)) {
@@ -343,7 +346,8 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  processDirectory(mocapDirectoryPath, imuDirectoryPath, outputPath, MAX_THREADS);
+  processDirectory(mocapDirectoryPath, imuDirectoryPath, outputPath,
+                   MAX_THREADS);
   std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
   std::cout << "Runtime = "
             << std::chrono::duration_cast<std::chrono::microseconds>(end -
