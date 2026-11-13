@@ -38,12 +38,20 @@ To setup the Docker container:
 1. [Install Docker](https://docs.docker.com/get-started/get-docker/) and start Docker.
 2. Build the development container (this may take some time depending on your machine's power):
 ```bash
-docker build . -t kfb-opensim-cpp
+docker build  \
+    --build-arg UID=$(id -u) \
+    --build-arg GID=$(id -g) \
+    . -t kfb-opensim-cpp
 ```
 3. Start the development container. You will now have a shell into the container
 where the OpenSim dependencies and environment is configured:
 ```bash
-docker run -it -v ~/data:/root/data -v ./opensim_cpp:/root/opensim_cpp kfb-opensim-cpp
+docker run -it \
+    -v "$PWD/opensim_cpp:/workspace/opensim_cpp" \
+    -v "$HOME/data:/home/opensim/data" \
+    --name kfb-opensim-cpp \
+    kfb-opensim-cpp
+docker start kfb-opensim-cpp && docker exec -it kfb-opensim-cpp /bin/zsh
 ```
 *NOTE*: The Docker volume mount syntax is
 `-v <host_path>:<container_path>`. The `~/data:/root/data` mount is so you can process

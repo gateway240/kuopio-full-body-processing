@@ -26,51 +26,83 @@ RUN dnf install -y \
     pcre2-devel \
     git \
     # Packages end
-    && \
-    dnf clean all && \
-    rm -rf /var/cache/dnf
+    && dnf clean all \
+    && rm -rf /var/cache/dnf
 
 # Download OpenSim source
+ARG OSIM_COMMIT="8f1e274f8221d74052cc190899078dca3db623d8"
 RUN mkdir /opensim \
-    && curl -SL https://github.com/opensim-org/opensim-core/archive/refs/tags/4.6.tar.gz \
+    && curl -SL https://github.com/gateway240/opensim-core/archive/${OSIM_COMMIT}.tar.gz \
     | tar xzf - -C /opensim --strip-components=1
 
 WORKDIR /opensim
 # Build dependencies
 RUN cmake -S ./dependencies -B ./dependencies/build \
-        -DCMAKE_INSTALL_PREFIX=./dependencies/install \
-        -DSUPERBUILD_ezc3d=on \
-        -DOPENSIM_WITH_CASADI=on \
+    -DCMAKE_INSTALL_PREFIX=./dependencies/install \
+    -DSUPERBUILD_ezc3d=on \
+    -DOPENSIM_WITH_CASADI=on \
     && cmake --build ./dependencies/build \
         --config Release \
         --parallel
 # Configure and build opensim-core
 RUN cmake . -B ./build \
-  -DOPENSIM_DEPENDENCIES_DIR=./dependencies/install \
-  -DCMAKE_INSTALL_PREFIX=~/opensim-core \
-  -Dezc3d_DIR=./dependencies/install/ezc3d/lib64/cmake/ezc3d \
-  -DBUILD_JAVA_WRAPPING=off \
-  -DBUILD_PYTHON_WRAPPING=off \
-  -DPython3_FIND_STRATEGY=LOCATION \
-  -DOPENSIM_PYTHON_STANDALONE=off \
-  -DBUILD_PYTHON_WHEELS=off \
-  -DBUILD_EXAMPLES=off \
-  -DBUILD_TESTING=off \
-  -DOPENSIM_WITH_CASADI=on \
-  -DOPENSIM_C3D_PARSER=ezc3d \
-  -DOPENSIM_INSTALL_UNIX_FHS=off \
-  -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
-  && cmake --build ./build \
-    --config Release \
-    --parallel
+    -DOPENSIM_DEPENDENCIES_DIR=./dependencies/install \
+    -DCMAKE_INSTALL_PREFIX=/opt/opensim-core \
+    -Dezc3d_DIR=./dependencies/install/ezc3d/lib64/cmake/ezc3d \
+    -DBUILD_JAVA_WRAPPING=off \
+    -DBUILD_PYTHON_WRAPPING=off \
+    -DPython3_FIND_STRATEGY=LOCATION \
+    -DOPENSIM_PYTHON_STANDALONE=off \
+    -DBUILD_PYTHON_WHEELS=off \
+    -DBUILD_EXAMPLES=off \
+    -DBUILD_TESTING=off \
+    -DOPENSIM_WITH_CASADI=on \
+    -DOPENSIM_C3D_PARSER=ezc3d \
+    -DOPENSIM_INSTALL_UNIX_FHS=off \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS=on \
+    && cmake --build ./build \
+        --config Release \
+        # Use 3/4 of available processing power
+        --parallel $(($(nproc) * 3 / 4))
 
 # Install opensim-core
 RUN cmake --build ./build --target install
 
-ENV LD_LIBRARY_PATH="/opensim/dependencies/install/ezc3d/lib64:/root/opensim-core/sdk/lib"
+# Install development deps
+ARG BOOTSTRAP_COMMIT="9b0fc84bfef09f0fd191f954619a5e541352dfe2"
 
-COPY ./opensim_cpp /root/opensim_cpp
+ENV INSTALL_SCRIPT="https://raw.githubusercontent.com/gateway240/dotfiles/${BOOTSTRAP_COMMIT}/install_deps.sh"
+RUN curl -fsSL "$INSTALL_SCRIPT" | /bin/bash
+# --------------------------------------------------------------------------
+# Create user matching host UID/GID
+# --------------------------------------------------------------------------
 
-WORKDIR /root/opensim_cpp
+ARG UID=1000
+ARG GID=1000
 
-CMD ["/bin/bash"]
+RUN groupadd -g ${GID} opensim \
+    && useradd -m -u ${UID} -g ${GID} -s /bin/bash opensim
+
+# --------------------------------------------------------------------------
+# Workspace
+# --------------------------------------------------------------------------
+
+RUN mkdir -p /workspace \
+    && chown -R opensim:opensim \
+        /workspace \
+        /opensim \
+        /opt/opensim-core
+
+COPY --chown=opensim:opensim ./opensim_cpp /workspace/opensim_cpp
+
+WORKDIR /workspace/opensim_cpp
+
+ENV LD_LIBRARY_PATH=/opensim/dependencies/install/ezc3d/lib64:/opt/opensim-core/sdk/lib
+
+USER opensim
+
+RUN rm -f $HOME/.bashrc $HOME/.zshrc
+ENV BOOTSTRAP_SCRIPT="https://raw.githubusercontent.com/gateway240/dotfiles/${BOOTSTRAP_COMMIT}/bootstrap.sh"
+RUN curl -fsSL "$BOOTSTRAP_SCRIPT" | /bin/bash
+
+CMD ["/bin/zsh"]
