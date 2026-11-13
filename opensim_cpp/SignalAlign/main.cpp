@@ -89,9 +89,9 @@ std::pair<double, double> trimAndWrite(OpenSim::TimeSeriesTable_<T> &table,
   // CANNOT use table.trim because it uses the "next" time.
   // we need the closest time to avoid the off by 1 issue
   table.trimToIndices(start_index, end_index);
-  const auto& t0 = table.getIndependentColumn().front();
-  const auto &length = table.getNumRows();
-  const auto &ind_col = table.getIndependentColumn();
+  const auto t0 = table.getIndependentColumn().front();
+  const auto length = table.getNumRows();
+  const auto ind_col = table.getIndependentColumn();
   for (size_t i = 0; i < length; ++i) {
     table.setIndependentValueAtIndex(i, ind_col[i] - t0);
   }

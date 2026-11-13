@@ -332,6 +332,8 @@ if __name__ == "__main__":
         .add_heading("Acknowledgments", level=2)
         .add_paragraph(acknowledgments)
         .add_list(acknowledgments_list)
+        .add_heading("Publication", level=2)
+        .add_paragraph("Scientific Data: https://doi.org/10.1038/s41597-026-08550-z")
         .add_heading("Contact", level=2)
         .add_paragraph(contact)
         # .add_heading("Usage", level=2)
