@@ -1,6 +1,6 @@
-# Kuopio Full-Body Processing
+# [Kuopio Full-Body Dataset](https://doi.org/10.1038/s41597-026-08550-z) Processing
 
-These scripts preform the processing steps for the Kuopio Full-Body Dataset.
+These scripts preform the processing steps for the [Kuopio Full-Body Dataset](https://doi.org/10.1038/s41597-026-08550-z).
 They transform the raw Vicon and Xsens data into formats usable
 in OpenSim and other processing programs.
 
