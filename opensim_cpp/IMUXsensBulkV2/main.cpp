@@ -94,6 +94,15 @@ void process(
                                        accelerationsOutputPath);
     std::cout << "\tWrote'" << accelerationsOutputPath << std::endl;
 
+    // Angular Velocity
+    const OpenSim::TimeSeriesTableVec3 &angVelTableTyped =
+        reader.getAngularVelocityTable(tables);
+    const std::string angVelocityOutputPath =
+        base_filename + "_angular_velocities.sto";
+    OpenSim::STOFileAdapterVec3::write(angVelTableTyped,
+                                       angVelocityOutputPath);
+    std::cout << "\tWrote'" << angVelocityOutputPath << std::endl;
+
   } catch (const std::exception &e) {
     // Catching standard exceptions
     std::cerr << "Error in processing File: " << file << " " << trial_prefix << " with Exception: " << e.what() << std::endl;

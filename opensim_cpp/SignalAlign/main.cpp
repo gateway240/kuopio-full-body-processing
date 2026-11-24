@@ -132,6 +132,8 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
 
   fs::path orientationsFile = imuDir / (trialName + "_orientations.sto");
   fs::path accelerationsFile = imuDir / (trialName + "_accelerations.sto");
+  fs::path angularVelocitiesFile =
+      imuDir / (trialName + "_angular_velocities.sto");
   fs::path grfFile = mocapDir / (trialName + "_grfs.sto");
   fs::path markerFile = mocapDir / (trialName + "_markers.trc");
 
@@ -146,6 +148,7 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
   // Output paths with "extracted" replaced by "aligned"
   fs::path outOrientations = makeOutPath(orientationsFile);
   fs::path outAccelerations = makeOutPath(accelerationsFile);
+  fs::path outAngularVelocities = makeOutPath(angularVelocitiesFile);
   fs::path outAnalog = makeOutPath(analogFile);
   fs::path outGrf = makeOutPath(grfFile);
   fs::path outMarker = makeOutPath(markerFile);
@@ -242,9 +245,13 @@ void processTrial(const fs::path &analogFile, const fs::path &originalRoot,
 
   // write IMU files
   OpenSim::TimeSeriesTableVec3 accelerations(accelerationsFile.string());
+  OpenSim::TimeSeriesTableVec3 angularVelocities(
+      angularVelocitiesFile.string());
   OpenSim::STOFileAdapterQuaternion::write(orientations,
                                            outOrientations.string());
   OpenSim::STOFileAdapterVec3::write(accelerations, outAccelerations.string());
+  OpenSim::STOFileAdapterVec3::write(angularVelocities,
+                                     outAngularVelocities.string());
 
   // Trim markers (100 Hz) and get new cut time
   OpenSim::TimeSeriesTableVec3 marker_table(markerFile.string());
